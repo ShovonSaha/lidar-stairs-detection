@@ -1,0 +1,7 @@
+<launch>
+  <!-- Launch your C++ node -->
+  <node name="pcl_node" pkg="stat_analysis" type="z_values" output="screen" />
+
+  <!-- Launch your Python node -->
+  <node name="plot_lidar_data" pkg="stat_analysis" type="axis_sub.py" output="screen" />
+</launch>
