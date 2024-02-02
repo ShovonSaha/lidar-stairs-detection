@@ -22,7 +22,7 @@
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-
+#include <Eigen/Dense>
 
 
 // ROS Publishers
@@ -33,6 +33,10 @@ ros::Publisher pub_after_plane_2;
 ros::Publisher pub_after_plane_3;
 ros::Publisher pub_after_plane_4;
 ros::Publisher marker_pub;
+
+// Declare plane_coefficients globally
+// std::vector<pcl::ModelCoefficients> plane_coefficients;
+
 
 ros::Publisher getPlanePublisher(size_t plane_index, ros::NodeHandle& nh)
 {
@@ -52,138 +56,65 @@ void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, con
     publisher.publish(output_msg);
 }
 
-// // Function to publish a segmented plane as a marker
-// void publishSegmentedPlaneMarker(const pcl::PointCloud<pcl::PointXYZ>::Ptr& segmented_plane, const ros::Publisher& marker_publisher, const pcl::ModelCoefficients::Ptr& coefficients)
-// {
-//     // Create a marker for the segmented plane
-//     visualization_msgs::Marker plane_marker;
-//     plane_marker.header.frame_id = segmented_plane->header.frame_id;  // Assuming the cloud's frame is relevant
-//     plane_marker.header.stamp = ros::Time::now();
-//     plane_marker.ns = "segmented_plane";
-//     plane_marker.id = marker_publisher.getNumSubscribers();  // Use the number of subscribers as an ID
-//     plane_marker.type = visualization_msgs::Marker::CUBE
-//     plane_marker.action = visualization_msgs::Marker::ADD;
-
-//     // Set the marker properties
-//     plane_marker.points.resize(segmented_plane->size() + 1);  // Add 1 for closing the loop
-//     for (size_t i = 0; i < segmented_plane->size(); ++i)
-//     {
-//         // Convert each point in the segmented plane to a geometry_msgs::Point
-//         geometry_msgs::Point point;
-//         point.x = segmented_plane->points[i].x;
-//         point.y = segmented_plane->points[i].y;
-//         point.z = segmented_plane->points[i].z;
-//         plane_marker.points[i] = point;
-//     }
-
-//     // Close the loop by connecting the last point to the first point
-//     plane_marker.points[segmented_plane->size()] = plane_marker.points[0];
-
-//     plane_marker.scale.x = 0.2;
-//     plane_marker.scale.y = 0.7;
-//     plane_marker.scale.z = 0.02;
-//     plane_marker.color.a = 0.4;   // Opacity
-//     plane_marker.color.r = 1.0;
-//     plane_marker.color.g = 0.0;
-//     plane_marker.color.b = 0.0;
-
-//     // Publish the marker
-//     marker_publisher.publish(plane_marker);
-
-//     // Print the equation of the plane
-//     ROS_INFO("Equation of Plane %u: Ax + By + Cz + D = 0", marker_publisher.getNumSubscribers());
-//     ROS_INFO("A: %f, B: %f, C: %f, D: %f", coefficients->values[0], coefficients->values[1], coefficients->values[2], coefficients->values[3]);
-// }
 
 
-
-// Using Quaternions for transformation/rotation in between frames
-// // Function to publish a segmented plane as a marker
-// void publishSegmentedPlaneMarker(const pcl::PointCloud<pcl::PointXYZ>::Ptr& segmented_plane, const ros::Publisher& marker_publisher, const pcl::ModelCoefficients::Ptr& coefficients)
-// {
-//     // Create a marker for the segmented plane
-//     visualization_msgs::Marker plane_marker;
-//     plane_marker.header.frame_id = segmented_plane->header.frame_id;  // Assuming the cloud's frame is relevant
-//     plane_marker.header.stamp = ros::Time::now();
-//     plane_marker.ns = "segmented_plane";
-//     plane_marker.id = marker_publisher.getNumSubscribers();  // Use the number of subscribers as an ID
-//     plane_marker.type = visualization_msgs::Marker::CUBE;  // Use CUBE for a marker representing the plane
-//     plane_marker.action = visualization_msgs::Marker::ADD;
-
-//     // Set the marker properties
-//     plane_marker.pose.position.x = coefficients->values[0];
-//     plane_marker.pose.position.y = coefficients->values[1];
-//     plane_marker.pose.position.z = coefficients->values[2];
-
-//     // Assuming that coefficients represents the normal of the plane
-//     // You might need to adjust this based on your specific requirements
-//     tf2::Quaternion quat;
-//     quat.setRPY(0, 0, std::atan2(coefficients->values[1], coefficients->values[0]));
-//     plane_marker.pose.orientation = tf2::toMsg(quat);
-
-//     plane_marker.scale.x = 1.0;
-//     plane_marker.scale.y = 1.0;
-//     plane_marker.scale.z = 0.05;  // Adjust the thickness of the thin block
-//     plane_marker.color.a = 1.0;  // Opacity
-//     plane_marker.color.r = 1.0;
-//     plane_marker.color.g = 0.0;
-//     plane_marker.color.b = 0.0;
-
-//     // Publish the marker
-//     marker_publisher.publish(plane_marker);
-
-//     // Print the equation of the plane
-//     ROS_INFO("Equation of Plane %u: Ax + By + Cz + D = 0", marker_publisher.getNumSubscribers());
-//     ROS_INFO("A: %f, B: %f, C: %f, D: %f", coefficients->values[0], coefficients->values[1], coefficients->values[2], coefficients->values[3]);
-// }
-
-
+// Function to publish a segmented plane as a marker
 void publishSegmentedPlaneMarker(const pcl::PointCloud<pcl::PointXYZ>::Ptr& segmented_plane, const ros::Publisher& marker_publisher, const pcl::ModelCoefficients::Ptr& coefficients)
 {
     // Create a marker for the segmented plane
     visualization_msgs::Marker plane_marker;
-    plane_marker.header.frame_id = segmented_plane->header.frame_id;
+    plane_marker.header.frame_id = segmented_plane->header.frame_id;  // Assuming the cloud's frame is relevant
     plane_marker.header.stamp = ros::Time::now();
     plane_marker.ns = "segmented_plane";
-    plane_marker.id = marker_publisher.getNumSubscribers();
-    plane_marker.type = visualization_msgs::Marker::CUBE;
+    plane_marker.id = marker_publisher.getNumSubscribers();  // Use the number of subscribers as an ID
+    plane_marker.type = visualization_msgs::Marker::CUBE;  // Use CUBE for a marker representing planes
     plane_marker.action = visualization_msgs::Marker::ADD;
 
+    // Calculate the centroid of the segmented plane
+    Eigen::Vector4f centroid;
+    pcl::compute3DCentroid(*segmented_plane, centroid);
+    geometry_msgs::Point centroid_point;
+    centroid_point.x = centroid[0];
+    centroid_point.y = centroid[1];
+    centroid_point.z = centroid[2];
+
     // Set the marker properties
-    plane_marker.points.resize(segmented_plane->size() + 1);
-
-    // Set the orientation directly (without quaternions)
-    plane_marker.pose.orientation.x = 0.0;
-    plane_marker.pose.orientation.y = 0.0;
-    plane_marker.pose.orientation.z = 0.0;
-    plane_marker.pose.orientation.w = 1.0;
-
-    for (size_t i = 0; i < segmented_plane->size(); ++i)
-    {
-        geometry_msgs::Point point;
-        point.x = segmented_plane->points[i].x;
-        point.y = segmented_plane->points[i].y;
-        point.z = segmented_plane->points[i].z;
-        plane_marker.points[i] = point;
-    }
-
-    plane_marker.points[segmented_plane->size()] = plane_marker.points[0];
-
+    plane_marker.pose.position = centroid_point;  // Set the position to the centroid
     plane_marker.scale.x = 0.2;
     plane_marker.scale.y = 0.7;
     plane_marker.scale.z = 0.02;
-    plane_marker.color.a = 0.4;
+    plane_marker.color.a = 0.4;   // Opacity
     plane_marker.color.r = 1.0;
     plane_marker.color.g = 0.0;
     plane_marker.color.b = 0.0;
+
+    // Calculate the orientation based on the plane's normal vector
+    Eigen::Vector3d normal_vector(coefficients->values[0], coefficients->values[1], coefficients->values[2]);
+    normal_vector.normalize();  // Ensure the normal vector is normalized
+
+    // // Create a quaternion from the axis-angle representation
+    // Eigen::AngleAxisd rotation(normal_vector.cross(Eigen::Vector3d::UnitZ()), std::acos(normal_vector.dot(Eigen::Vector3d::UnitZ())));
+    // Eigen::Quaterniond quat(rotation);
+    
+    // Create a quaternion from the axis-angle representation
+    Eigen::Quaterniond quat(Eigen::AngleAxisd(std::acos(normal_vector.dot(Eigen::Vector3d::UnitZ())), normal_vector.cross(Eigen::Vector3d::UnitZ())));
+
+
+    // Set the orientation using the quaternion
+    plane_marker.pose.orientation.x = quat.x();
+    plane_marker.pose.orientation.y = quat.y();
+    plane_marker.pose.orientation.z = quat.z();
+    plane_marker.pose.orientation.w = quat.w();
 
     // Publish the marker
     marker_publisher.publish(plane_marker);
 
     // Print the equation of the plane
-    ROS_INFO("Equation of Plane %u: Ax + By + Cz + D = 0", marker_publisher.getNumSubscribers());
-    ROS_INFO("A: %f, B: %f, C: %f, D: %f", coefficients->values[0], coefficients->values[1], coefficients->values[2], coefficients->values[3]);
+    // ROS_INFO("Equation of Plane %u: Ax + By + Cz + D = 0", marker_publisher.getNumSubscribers());
+    // ROS_INFO("A: %f, B: %f, C: %f, D: %f", coefficients->values[0], coefficients->values[1], coefficients->values[2], coefficients->values[3]);
 }
+
+
 
 
 
@@ -237,11 +168,63 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr downsamplingAlongAxis(const pcl::PointCloud<
 //     return normals;
 // }
 
-// Function to segment planes and publish segmented planes
+// // Function to segment planes and publish segmented planes
+// pcl::PointCloud<pcl::PointXYZ>::Ptr segmentPlanes(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, std::vector<pcl::ModelCoefficients>& plane_coefficients, double distance_threshold, const sensor_msgs::PointCloud2ConstPtr& original_msg, ros::NodeHandle& nh)
+// {
+//     pcl::PointCloud<pcl::PointXYZ>::Ptr remaining_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+//     pcl::copyPointCloud(*cloud, *remaining_cloud);
+
+//     for (size_t i = 0; i < plane_coefficients.size(); ++i)
+//     {
+//         pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+//         pcl::ModelCoefficients::Ptr current_coefficients(new pcl::ModelCoefficients);
+
+//         pcl::SACSegmentation<pcl::PointXYZ> seg;
+//         seg.setOptimizeCoefficients(true);
+//         seg.setModelType(pcl::SACMODEL_PLANE);
+//         seg.setMethodType(pcl::SAC_RANSAC);
+//         seg.setDistanceThreshold(distance_threshold);
+//         seg.setInputCloud(remaining_cloud);
+//         seg.segment(*inliers, *current_coefficients);
+
+//         if (inliers->indices.size() < 100)
+//         {
+//             // If the number of inliers is too small, skip this plane
+//             continue;
+//         }
+
+//         pcl::PointCloud<pcl::PointXYZ>::Ptr current_plane(new pcl::PointCloud<pcl::PointXYZ>);
+//         pcl::ExtractIndices<pcl::PointXYZ> extract;
+//         extract.setInputCloud(remaining_cloud);
+//         extract.setIndices(inliers);
+//         extract.setNegative(false);
+//         extract.filter(*current_plane);
+
+//         // Publish processed cloud and segmented plane marker
+//         publishProcessedCloud(current_plane, nh.advertise<sensor_msgs::PointCloud2>("/plane_" + std::to_string(i + 1), 1), original_msg);
+//         publishSegmentedPlaneMarker(current_plane, marker_pub, current_coefficients);
+
+//         extract.setNegative(true);
+//         extract.filter(*remaining_cloud);
+
+//         // Store the plane coefficients
+//         plane_coefficients[i] = *current_coefficients;
+//     }
+
+//     return remaining_cloud;
+// }
+
+
+// pcl::PointCloud<pcl::PointXYZ>::Ptr segmentPlanes(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, std::vector<pcl::ModelCoefficients>& plane_coefficients, double distance_threshold, const sensor_msgs::PointCloud2ConstPtr& original_msg, ros::NodeHandle& nh)
 pcl::PointCloud<pcl::PointXYZ>::Ptr segmentPlanes(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, std::vector<pcl::ModelCoefficients>& plane_coefficients, double distance_threshold, const sensor_msgs::PointCloud2ConstPtr& original_msg, ros::NodeHandle& nh)
 {
     pcl::PointCloud<pcl::PointXYZ>::Ptr remaining_cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::copyPointCloud(*cloud, *remaining_cloud);
+
+    // Sort planes based on the number of inliers (largest plane first)
+    std::sort(plane_coefficients.begin(), plane_coefficients.end(), [](const pcl::ModelCoefficients& a, const pcl::ModelCoefficients& b) {
+        return a.values.size() > b.values.size();
+    });
 
     for (size_t i = 0; i < plane_coefficients.size(); ++i)
     {
@@ -262,6 +245,7 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr segmentPlanes(const pcl::PointCloud<pcl::Poi
             continue;
         }
 
+        // Perform clustering
         pcl::PointCloud<pcl::PointXYZ>::Ptr current_plane(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::ExtractIndices<pcl::PointXYZ> extract;
         extract.setInputCloud(remaining_cloud);
@@ -269,19 +253,43 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr segmentPlanes(const pcl::PointCloud<pcl::Poi
         extract.setNegative(false);
         extract.filter(*current_plane);
 
-        // Publish processed cloud and segmented plane marker
-        publishProcessedCloud(current_plane, nh.advertise<sensor_msgs::PointCloud2>("/plane_" + std::to_string(i + 1), 1), original_msg);
-        publishSegmentedPlaneMarker(current_plane, marker_pub, current_coefficients);
+        std::vector<pcl::PointIndices> cluster_indices;
+        pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+        // ec.setClusterTolerance(distance_threshold); // Adjust based on your point cloud characteristics
+        ec.setClusterTolerance(0.06);
+        ec.setMinClusterSize(50);    // Adjust based on your point cloud characteristics
+        // ec.setMaxClusterSize(current_plane->size());  // Adjust based on your point cloud characteristics
+        ec.setMaxClusterSize(200);
+        ec.setInputCloud(current_plane);
+        ec.extract(cluster_indices);
 
-        extract.setNegative(true);
-        extract.filter(*remaining_cloud);
+        // Consider only the largest cluster
+        if (cluster_indices.size() > 0)
+        {
+            pcl::PointIndices::Ptr largest_cluster = boost::make_shared<pcl::PointIndices>(cluster_indices[0]);
+            extract.setIndices(largest_cluster);
+            extract.filter(*current_plane);
 
-        // Store the plane coefficients
-        plane_coefficients[i] = *current_coefficients;
+            // Publish processed cloud and segmented plane marker
+            publishProcessedCloud(current_plane, nh.advertise<sensor_msgs::PointCloud2>("/plane_" + std::to_string(i + 1), 1), original_msg);
+            publishSegmentedPlaneMarker(current_plane, marker_pub, current_coefficients);
+
+            // Print the equation of the plane
+            ROS_INFO("Equation of Plane %zu: Ax + By + Cz + D = 0", i + 1);
+            ROS_INFO("A: %f, B: %f, C: %f, D: %f", current_coefficients->values[0], current_coefficients->values[1], current_coefficients->values[2], current_coefficients->values[3]);
+
+
+            extract.setNegative(true);
+            extract.filter(*remaining_cloud);
+
+            // Store the plane coefficients
+            plane_coefficients[i] = *current_coefficients;
+        }
     }
 
     return remaining_cloud;
 }
+
 
 // Function to calculate the variance of a plane
 double calculatePlaneVariance(const pcl::PointCloud<pcl::PointXYZ>::Ptr& plane)
@@ -319,25 +327,42 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // Step 1: Publish processed clouds
     publishProcessedCloud(cloud_after_passthrough_y, pub_after_passthrough_y, input_msg);
     publishProcessedCloud(cloud_after_axis_downsampling, pub_after_axis_downsampling, input_msg);
-
+    
+    // Update the number of planes based on the size of plane_coefficients
+    // size_t num_planes = plane_coefficients.size();
+    
     // Step 2: Segment planes
     std::vector<pcl::ModelCoefficients> plane_coefficients(4);  // Assuming you want to find 4 planes
-    pcl::PointCloud<pcl::PointXYZ>::Ptr remaining_cloud = segmentPlanes(cloud_after_axis_downsampling, plane_coefficients, 0.07, input_msg, nh);
+    
+    // Assuming you want to find 4 planes
+    // size_t num_planes = 4;
+    
+    // parameters passed: segmentPlanes(input pointcloud, plane_coefficients, distance threshold, sensor msg, node handle)
+    pcl::PointCloud<pcl::PointXYZ>::Ptr remaining_cloud = segmentPlanes(cloud_after_axis_downsampling, plane_coefficients, 0.05, input_msg, nh);
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr remaining_cloud = segmentPlanes(cloud_after_axis_downsampling, plane_coefficients, num_planes, 0.05, input_msg, nh);
 
-    // // Step 3: Calculate and print plane variances
-    // for (size_t i = 0; i < plane_coefficients.size(); ++i)
-    // {
-    //     pcl::PointCloud<pcl::PointXYZ>::Ptr current_plane(new pcl::PointCloud<pcl::PointXYZ>);
-    //     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-    //     pcl::ExtractIndices<pcl::PointXYZ> extract;
-    //     extract.setInputCloud(remaining_cloud);
-    //     extract.setIndices(inliers);
-    //     extract.setNegative(false);
-    //     extract.filter(*current_plane);
+    ROS_INFO("-----------------------------------------------");
+    
+    // Step 3: Calculate and print plane variances
+    for (size_t i = 0; i < plane_coefficients.size(); ++i)
+    {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr current_plane(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+        pcl::ExtractIndices<pcl::PointXYZ> extract;
+        extract.setInputCloud(remaining_cloud);
+        extract.setIndices(inliers);
+        extract.setNegative(false);
+        extract.filter(*current_plane);
 
-    //     double variance = calculatePlaneVariance(current_plane);
-    //     ROS_INFO("Variance of plane %zu: %f", i, variance);
-    // }
+        double variance = calculatePlaneVariance(current_plane);
+        ROS_INFO("Variance of plane %zu: %f", i, variance);
+    }
+
+    ROS_INFO(" ");
+    ROS_INFO("//////////////////////////////////////////////////////////////////////");
+    
+    // Introducing a delay for analyzing results
+    ros::Duration(1.0).sleep();
 }
 
 // ROS main function
