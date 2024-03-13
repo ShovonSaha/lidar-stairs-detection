@@ -1,180 +1,166 @@
-// ROS
 #include <ros/ros.h>
-#include <ros/time.h>
 #include <sensor_msgs/PointCloud2.h>
-
-// PCL
-#include <pcl/common/common.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
+#include <pcl/filters/voxel_grid.h>
 #include <pcl/features/normal_3d.h>
-#include <pcl/search/organized.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <pcl/segmentation/sac_segmentation.h>
-#include <pcl/segmentation/extract_clusters.h>
-#include <pcl/filters/extract_indices.h>
-#include <pcl/segmentation/extract_labeled_clusters.h>
-#include <pcl/common/io.h>
-#include <pcl/surface/mls.h>
-#include <pcl/filters/bilateral.h>
-#include <visualization_msgs/Marker.h>
-#include <pcl/segmentation/region_growing.h>
 #include <pcl/segmentation/conditional_euclidean_clustering.h>
-#include <pcl/features/normal_3d.h>
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/common/transforms.h>
+#include <visualization_msgs/Marker.h>
 
-class PlaneExtractor
+ros::Publisher pub_after_passthrough_y;
+ros::Publisher pub_after_axis_downsampling;
+ros::Publisher pub_after_plane_marker;
+
+typedef pcl::PointXYZ PointTypeIO;
+typedef pcl::PointXYZINormal PointTypeFull;
+
+bool customRegionGrowing(const PointTypeFull& point_a, const PointTypeFull& point_b, float squared_distance)
 {
-public:
-    PlaneExtractor(ros::NodeHandle nh) : _nh(nh)
+    Eigen::Map<const Eigen::Vector3f> point_a_normal = point_a.getNormalVector3fMap(), point_b_normal = point_b.getNormalVector3fMap();
+    if (squared_distance < 10000)
     {
-        initialize();
+        if (std::abs(point_a_normal.dot(point_b_normal)) > std::cos(30.0f / 180.0f * static_cast<float>(M_PI)))
+            return true;
     }
+    return false;
+}
 
-    void initialize()
-    {
-        // Initialize parameters and publishers
-        _pub_inliers = _nh.advertise<sensor_msgs::PointCloud2>("segmented_planes", 2);
-
-        // Set parameters as needed
-        _max_distance = 0.005;
-        _min_percentage = 5;
-        _desired_num_planes = 10;
-    }
-
-    void pointCloudCb(const sensor_msgs::PointCloud2::ConstPtr &msg)
-    {
-        // Convert to pcl point cloud
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_msg(new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::fromROSMsg(*msg, *cloud_msg);
-
-        // Step 1: Passthrough filter in Y-axis
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_passthrough_y = passthroughFilterY(cloud_msg);
-
-        // Step 2: Downsampling along an axis
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_downsampled = downsamplingAlongAxis(cloud_passthrough_y, "x", 0.0, 2.5);
-
-        // Loop to find and publish planes
-        for (int i = 0; i < _desired_num_planes; ++i)
-        {
-            // Step 3: Find a plane in the downsampled cloud
-            pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
-            pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-            findPlane(cloud_downsampled, coefficients, inliers);
-
-            // Check result
-            if (inliers->indices.size() > 0)
-            {
-                // Step 4: Publish the segmented plane (inliers)
-                publishSegmentedPlane(cloud_downsampled, inliers);
-
-                // Step 5: Remove inliers found from the plane in the current cloud
-                removeInliers(cloud_downsampled, inliers);
-            }
-            else
-            {
-                ROS_WARN("No plane found in iteration %d", i + 1);
-                break;
-            }
-        }
-    }
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterY(const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud)
-    {
-        pcl::PassThrough<pcl::PointXYZ> pass;
-        pass.setInputCloud(cloud);
-        pass.setFilterFieldName("y");
-        pass.setFilterLimits(-0.7, 0.7);
-        pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-        pass.filter(*filtered_cloud);
-
-        return filtered_cloud;
-    }
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr downsamplingAlongAxis(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const std::string& axis, double min_limit, double max_limit)
-    {
-    pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
-    voxel_grid.setInputCloud(cloud);
-    voxel_grid.setLeafSize(0.05, 0.05, 0.05);  // Set an initial leaf size
-    voxel_grid.setFilterFieldName(axis);
-    voxel_grid.setFilterLimits(min_limit, max_limit);
-    
-    // Create a new point cloud to store the downsampled points
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_downsampled(new pcl::PointCloud<pcl::PointXYZ>);
-    
-    // Apply voxel grid downsampling
-    voxel_grid.filter(*cloud_downsampled);
-
-    // Update the width and height fields of the downsampled point cloud
-    cloud_downsampled->width = cloud_downsampled->size();
-    cloud_downsampled->height = 1;
-
-    return cloud_downsampled;
-    }
-
-    void findPlane(const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud, pcl::ModelCoefficients::Ptr &coefficients, pcl::PointIndices::Ptr &inliers)
-    {
-        pcl::SACSegmentation<pcl::PointXYZ> seg;
-        seg.setOptimizeCoefficients(true);
-        seg.setModelType(pcl::SACMODEL_PLANE);
-        seg.setMethodType(pcl::SAC_RANSAC);
-        seg.setDistanceThreshold(_max_distance);
-        seg.setInputCloud(cloud);
-        seg.segment(*inliers, *coefficients);
-    }
-
-    void publishSegmentedPlane(const pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud, const pcl::PointIndices::Ptr &inliers)
-    {
-        pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_pub(new pcl::PointCloud<pcl::PointXYZRGB>);
-
-        for (const auto &index : inliers->indices)
-        {
-            pcl::PointXYZRGB pt;
-            pt.x = cloud->points[index].x;
-            pt.y = cloud->points[index].y;
-            pt.z = cloud->points[index].z;
-            pt.r = 255; // You can adjust the color as needed
-            pt.g = 0;
-            pt.b = 0;
-            cloud_pub->points.push_back(pt);
-        }
-
-        sensor_msgs::PointCloud2 cloud_publish;
-        pcl::toROSMsg(*cloud_pub, cloud_publish);
-        cloud_publish.header = msg->header;
-        _pub_inliers.publish(cloud_publish);
-    }
-
-    void removeInliers(pcl::PointCloud<pcl::PointXYZ>::Ptr &cloud, const pcl::PointIndices::Ptr &inliers)
-    {
-        pcl::ExtractIndices<pcl::PointXYZ> extract;
-        extract.setInputCloud(cloud);
-        extract.setIndices(inliers);
-        extract.setNegative(true);
-        pcl::PointCloud<pcl::PointXYZ> cloudF;
-        extract.filter(cloudF);
-        cloud->swap(cloudF);
-    }
-
-private:
-    ros::NodeHandle _nh;
-    ros::Publisher _pub_inliers;
-
-    double _max_distance;
-    double _min_percentage;
-    int _desired_num_planes;
-};
-
-int main(int argc, char **argv)
+void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg)
 {
-    ros::init(argc, argv, "planeExtractor");
-    ros::NodeHandle nh("~");
+    pcl::PointCloud<PointTypeIO>::Ptr cloud(new pcl::PointCloud<PointTypeIO>);
+    pcl::fromROSMsg(*input_msg, *cloud);
 
-    PlaneExtractor extractor(nh);
+    // Step 1: Passthrough Filtering with Y-Axis
+    pcl::PassThrough<PointTypeIO> pass_y;
+    pass_y.setInputCloud(cloud);
+    pass_y.setFilterFieldName("y");
+    pass_y.setFilterLimits(-0.7, 0.7);
+    pcl::PointCloud<PointTypeIO>::Ptr cloud_after_passthrough_y(new pcl::PointCloud<PointTypeIO>);
+    pass_y.filter(*cloud_after_passthrough_y);
+    sensor_msgs::PointCloud2 output_msg_passthrough_y;
+    pcl::toROSMsg(*cloud_after_passthrough_y, output_msg_passthrough_y);
+    output_msg_passthrough_y.header = input_msg->header;
+    pub_after_passthrough_y.publish(output_msg_passthrough_y);
 
-    ros::Subscriber sub = nh.subscribe("/your_point_cloud_topic", 1, &PlaneExtractor::pointCloudCb, &extractor);
+    // Step 2: Downsampling along X-axis
+    pcl::VoxelGrid<PointTypeIO> voxel_grid;
+    voxel_grid.setInputCloud(cloud_after_passthrough_y);
+    voxel_grid.setLeafSize(0.05, 0.05, 0.05); // Adjust leaf size as needed
+    pcl::PointCloud<PointTypeIO>::Ptr cloud_after_downsampling(new pcl::PointCloud<PointTypeIO>);
+    voxel_grid.filter(*cloud_after_downsampling);
+    sensor_msgs::PointCloud2 output_msg_downsampling;
+    pcl::toROSMsg(*cloud_after_downsampling, output_msg_downsampling);
+    output_msg_downsampling.header = input_msg->header;
+    pub_after_axis_downsampling.publish(output_msg_downsampling);
+
+    // Step 3: Rotation based on tilt angle
+    float tilt_angle = 10.0; // Example tilt angle in degrees
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_rotated(new pcl::PointCloud<pcl::PointXYZ>);
+    Eigen::Affine3f transform = Eigen::Affine3f::Identity();
+    transform.rotate(Eigen::AngleAxisf(tilt_angle * M_PI / 180.0, Eigen::Vector3f::UnitX()));
+    pcl::transformPointCloud(*cloud_after_downsampling, *cloud_rotated, transform);
+
+    // Step 4: Normal estimation after rotation
+    pcl::PointCloud<PointTypeFull>::Ptr cloud_with_normals(new pcl::PointCloud<PointTypeFull>);
+    pcl::NormalEstimation<PointTypeIO, PointTypeFull> ne;
+    pcl::search::KdTree<PointTypeIO>::Ptr tree(new pcl::search::KdTree<PointTypeIO>());
+    ne.setInputCloud(cloud_rotated);
+    ne.setSearchMethod(tree);
+    ne.setRadiusSearch(0.03); // Adjust radius as needed
+    ne.compute(*cloud_with_normals);
+
+    // Step 5: Conditional Euclidean Clustering using normals as a condition
+    pcl::IndicesClustersPtr clusters(new pcl::IndicesClusters);
+    pcl::ConditionalEuclideanClustering<PointTypeFull> cec(true);
+    cec.setInputCloud(cloud_with_normals);
+    cec.setConditionFunction(&customRegionGrowing);
+    cec.setClusterTolerance(0.05); // Adjust cluster tolerance as needed
+    cec.setMinClusterSize(100);    // Adjust min cluster size as needed
+    cec.setMaxClusterSize(10000);  // Adjust max cluster size as needed
+    cec.segment(*clusters);
+
+    // Step 6: Initialize variables for variance calculation and probability estimation
+    std::vector<float> plane_variances;
+    std::vector<float> plane_probabilities;
+
+    // Step 7: Iterate through clusters to calculate variance and probability for each plane
+    for (size_t i = 0; i < clusters->size(); ++i)
+    {
+        pcl::PointCloud<PointTypeFull>::Ptr cluster(new pcl::PointCloud<PointTypeFull>);
+        for (const auto& index : clusters->at(i).indices)
+        {
+            cluster->push_back(cloud_with_normals->points[index]);
+        }
+        cluster->width = cluster->size();
+        cluster->height = 1;
+        cluster->is_dense = true;
+
+        // Calculate variance of the plane
+        float variance = 0.0;
+        for (const auto& point : cluster->points)
+        {
+            variance += std::pow(point.z - cluster->points[0].z, 2); // Assuming z-axis represents height
+        }
+        variance /= cluster->size();
+        plane_variances.push_back(variance);
+
+        // Calculate probability assuming normal distribution
+        float mean = cluster->points[0].z; // Mean height of the plane
+        float probability = std::exp(-0.5 * std::pow(variance, -2) * std::pow(point.z - mean, 2)) / std::sqrt(2 * M_PI * variance);
+        plane_probabilities.push_back(probability);
+
+        // Publish resulting point clouds
+        sensor_msgs::PointCloud2 output_msg_cluster;
+        pcl::toROSMsg(*cluster, output_msg_cluster);
+        output_msg_cluster.header = input_msg->header;
+        pub_after_plane.publish(output_msg_cluster);
+
+        // Publish plane as a marker
+        visualization_msgs::Marker marker;
+        marker.header = input_msg->header;
+        marker.ns = "planes";
+        marker.id = i;
+        marker.type = visualization_msgs::Marker::PLANE;
+        marker.action = visualization_msgs::Marker::ADD;
+        marker.pose.position.x = clusters->at(i).centroid[0]; // Assuming centroid represents the position of the plane
+        marker.pose.position.y = clusters->at(i).centroid[1];
+        marker.pose.position.z = clusters->at(i).centroid[2];
+        marker.pose.orientation.x = 0.0;
+        marker.pose.orientation.y = 0.0;
+        marker.pose.orientation.z = 0.0;
+        marker.pose.orientation.w = 1.0;
+        marker.scale.x = 1.0;
+        marker.scale.y = 1.0;
+        marker.scale.z = 1.0;
+        marker.color.a = 0.5; // Semi-transparent
+        marker.color.r = 1.0;
+        marker.color.g = 0.0;
+        marker.color.b = 0.0;
+        pub_after_plane_marker.publish(marker);
+    }
+
+    // Step 8: Print probability values versus the position of the plane in x-axis
+    for (size_t i = 0; i < plane_probabilities.size(); ++i)
+    {
+        ROS_INFO("Plane %zu: Probability = %f, Position (x) = %f", i, plane_probabilities[i], clusters->at(i).centroid[0]);
+    }
+}
+
+int main(int argc, char** argv)
+{
+    ros::init(argc, argv, "pointcloud_processing_node");
+    ros::NodeHandle nh;
+
+    pub_after_passthrough_y = nh.advertise<sensor_msgs::PointCloud2>("/axis_passthrough_cloud", 1);
+    pub_after_axis_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/axis_downsampled_cloud", 1);
+    pub_after_plane = nh.advertise<sensor_msgs::PointCloud2>("/plane_cluster", 1);
+    pub_after_plane_marker = nh.advertise<visualization_msgs::Marker>("/plane_markers", 1);
+
+    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, pointcloud_callback);
 
     ros::spin();
 
