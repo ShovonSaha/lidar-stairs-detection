@@ -18,6 +18,21 @@ ros::Publisher pub_after_plane_marker;
 typedef pcl::PointXYZ PointTypeIO;
 typedef pcl::PointXYZINormal PointTypeFull;
 
+// Function to generate a random color
+std_msgs::ColorRGBA generateRandomColor()
+{
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> dis(0.0, 1.0);
+
+    std_msgs::ColorRGBA color;
+    color.r = dis(gen);
+    color.g = dis(gen);
+    color.b = dis(gen);
+    color.a = 0.5; // Semi-transparent
+    return color;
+}
+
 bool customRegionGrowing(const PointTypeFull& point_a, const PointTypeFull& point_b, float squared_distance)
 {
     Eigen::Map<const Eigen::Vector3f> point_a_normal = point_a.getNormalVector3fMap(), point_b_normal = point_b.getNormalVector3fMap();
@@ -119,6 +134,8 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg)
         output_msg_cluster.header = input_msg->header;
         pub_after_plane.publish(output_msg_cluster);
 
+        
+
         // Publish plane as a marker
         visualization_msgs::Marker marker;
         marker.header = input_msg->header;
@@ -136,10 +153,17 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg)
         marker.scale.x = 1.0;
         marker.scale.y = 1.0;
         marker.scale.z = 1.0;
-        marker.color.a = 0.5; // Semi-transparent
-        marker.color.r = 1.0;
-        marker.color.g = 0.0;
-        marker.color.b = 0.0;
+
+        // Generate a random color for the plane marker
+        std_msgs::ColorRGBA color = generateRandomColor();
+        marker.color = color;
+        
+        // marker.color.a = 0.5; // Semi-transparent
+        // marker.color.r = 1.0;
+        // marker.color.g = 0.0;
+        // marker.color.b = 0.0;
+
+        // Publish plane as a marker
         pub_after_plane_marker.publish(marker);
     }
 
