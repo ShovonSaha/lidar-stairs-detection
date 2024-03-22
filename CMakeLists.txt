@@ -183,6 +183,9 @@ add_definitions(${PCL_DEFINITIONS})
 
 add_executable(plane_prob src/plane_prob.cpp)
 
+# add_executable(plane_prob_1 src/plane_prob_1.cpp)
+
+
 # add_executable(pcl_viewer src/pcl_viewer.cpp)
 
 ## Rename C++ executable without prefix
@@ -230,6 +233,14 @@ target_link_libraries(plane_prob
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
 )
+
+
+
+# target_link_libraries(plane_prob_1 
+#   ${catkin_LIBRARIES}
+#   ${PCL_LIBRARIES}
+# )
+
 
 # target_link_libraries(pcl_viewer 
 #   ${catkin_LIBRARIES}
