@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: stat_analysis
+Description: Description of stat_analysis
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 
