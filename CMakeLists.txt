@@ -4,12 +4,41 @@ project(stat_analysis)
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
+# if(NOT CMAKE_BUILD_TYPE)
+#   set(CMAKE_BUILD_TYPE Release)
+# endif()
+
+# set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+# set(CMAKE_CXX_FLAGS_DEBUG "-g")
+# set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
+# Optimize the build for speed
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+
 
 # For PCL library
 find_package(PCL REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
+
+# find_package(MLPACK REQUIRED)
+# include_directories(${MLPACK_INCLUDE_DIRS})
+# include_directories(/usr/include/mlpack/methods/dbscan/dbscan.hpp)  # Adjust this path based on the output of locate. command: locate dbscan.hpp
+
+# Since find_package(MLPACK) failed to find MLPack automatically, specify manually
+include_directories(/usr/include)  # MLPack headers are here, as verified
+
+# Find Armadillo
+find_package(Armadillo REQUIRED)
+include_directories(${ARMADILLO_INCLUDE_DIRS})
+
+find_package(OpenMP REQUIRED)
+if(OPENMP_FOUND)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
 
 
 # Find Python3
@@ -229,12 +258,20 @@ add_executable(plane_prob src/plane_prob.cpp)
 
 
 
+# target_link_libraries(plane_prob 
+#   ${catkin_LIBRARIES}
+#   ${PCL_LIBRARIES}
+#   ${MLPACK_LIBRARIES}
+# )
+
+# Linking libraries
 target_link_libraries(plane_prob 
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
+  mlpack
+  armadillo
+  OpenMP::OpenMP_CXX
 )
-
-
 
 # target_link_libraries(plane_prob_1 
 #   ${catkin_LIBRARIES}

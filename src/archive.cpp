@@ -14,7 +14,7 @@ ros::Publisher marker_pub;
 
 ros::Publisher pub_after_plane_segmentation;
 
-Declare plane_coefficients globally
+// Declare plane_coefficients globally
 std::vector<pcl::ModelCoefficients> plane_coefficients(4);  // Assuming you want to find 4 planes
 
 std::vector<ros::Publisher> plane_publishers; // Publishers for segmented planes
@@ -49,6 +49,70 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterX(const pcl::PointCloud<pcl
 }
 
 
+pcl::PointCloud<pcl::PointXYZ>::Ptr downsamplingAlongAxis(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const std::string& axis, double min_limit, double max_limit)
+{
+    pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+    voxel_grid.setInputCloud(cloud);
+    voxel_grid.setLeafSize(0.12, 0.12, 0.12);  // Set an initial leaf size
+    voxel_grid.setFilterFieldName(axis);
+    voxel_grid.setFilterLimits(min_limit, max_limit);
+
+    // Create a new point cloud to store the downsampled points
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_downsampled(new pcl::PointCloud<pcl::PointXYZ>);
+
+    // Apply voxel grid downsampling
+    voxel_grid.filter(*cloud_downsampled);
+
+    // Update the width and height fields of the downsampled point cloud
+    cloud_downsampled->width = cloud_downsampled->size();
+    cloud_downsampled->height = 1;
+
+    return cloud_downsampled;
+}
+
+
+void performEuclideanClustering(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, ros::NodeHandle& nh) {
+    // Create a KdTree object for the search method of the extraction
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+    tree->setInputCloud(cloud);
+
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+    ec.setClusterTolerance(0.1); // 0.1 = 10cm
+    ec.setMinClusterSize(10); // Minimum size of a cluster
+    ec.setMaxClusterSize(500); // Maximum size of a cluster
+    ec.setSearchMethod(tree);
+    ec.setInputCloud(cloud);
+    ec.extract(cluster_indices);
+
+    ROS_INFO("Number of clusters found: %d", static_cast<int>(cluster_indices.size()));
+
+    int j = 0;
+    for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin(); it != cluster_indices.end(); ++it) {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster(new pcl::PointCloud<pcl::PointXYZ>);
+        for (const auto& idx : it->indices)
+            cloud_cluster->points.push_back(cloud->points[idx]); //*
+
+        cloud_cluster->width = cloud_cluster->points.size();
+        cloud_cluster->height = 1;
+        cloud_cluster->is_dense = true;
+
+        ROS_INFO("Publishing cluster %d with %ld points", j, cloud_cluster->points.size());
+
+        // Publish each cluster
+        std::string topic_name = "/cluster_" + std::to_string(j);
+        ros::Publisher pub_cluster = nh.advertise<sensor_msgs::PointCloud2>(topic_name, 1, true);
+        sensor_msgs::PointCloud2 output;
+        pcl::toROSMsg(*cloud_cluster, output);
+        output.header.frame_id = "/laser_frame"; // Set to your global frame
+        output.header.stamp = ros::Time::now();
+        pub_cluster.publish(output);
+
+        ++j;
+    }
+    ros::Duration(6.0).sleep();
+}
+
 pcl::PointCloud<pcl::PointXYZ>::Ptr applyMLSSmoothing(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointNormal> mls_points;
@@ -67,6 +131,11 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr applyMLSSmoothing(const pcl::PointCloud<pcl:
     return cloud_smoothed;
 }
 
+
+int getNumberOfPoints(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+{
+    return cloud->size();
+}
 
 
 ros::Publisher getPlanePublisher(size_t plane_index, ros::NodeHandle& nh)
@@ -328,6 +397,12 @@ void publishSegmentedPlanes(const std::vector<pcl::PointCloud<pcl::PointXYZ>::Pt
 }
 
 
+int getNumberOfPoints(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+{
+    return cloud->size();
+}
+
+
 // Main callback function for processing PointCloud2 messages
 void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros::NodeHandle& nh)
 {
@@ -369,32 +444,32 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // Normal Estimation for rotated pointcloud
     pcl::PointCloud<pcl::Normal>::Ptr cloud_normals_after_rotation = computeNormals(cloud_rotated);
     
-    Update the number of planes based on the size of plane_coefficients
+    // Update the number of planes based on the size of plane_coefficients
     size_t num_planes = plane_coefficients.size();
     
-    Segment planes
+    // Segment planes
     
     segmentAndPublishPlanes(cloud, nh);
 
     segmentAndPublishPlanes(cloud_after_axis_downsampling, nh, input_msg);
 
-    Assuming you want to find 4 planes
+    // Assuming you want to find 4 planes
     size_t num_planes = 4;
     double distance_threshold = 0.05;
     
-    parameters passed: segmentPlanes(input pointcloud, plane_coefficients, distance threshold, sensor msg, node handle)
+    // parameters passed: segmentPlanes(input pointcloud, plane_coefficients, distance threshold, sensor msg, node handle)
     pcl::PointCloud<pcl::PointXYZ>::Ptr remaining_cloud = segmentPlanes(cloud_after_axis_downsampling, plane_coefficients, 0.05, input_msg, nh);
 
     
     
-    Assuming clustered_cloud is the result of clusterBasedOnNormals
+    // Assuming clustered_cloud is the result of clusterBasedOnNormals
     pcl::PointCloud<pcl::PointXYZ>::Ptr clustered_cloud = clusterBasedOnNormals(cloud_after_axis_downsampling, 0.06, 50, 200, distance_threshold, input_msg, nh);
 
-    Assuming remaining_cloud is the result of the original segmentation
+    // Assuming remaining_cloud is the result of the original segmentation
     pcl::PointCloud<pcl::PointXYZ>::Ptr refined_cloud = refineSegmentation(clustered_cloud, 0.05, input_msg, nh);
     pcl::PointCloud<pcl::PointXYZ>::Ptr clustered_cloud = euclideanClusterAndSegment(cloud_after_axis_downsampling, 0.06, 50, 200, 0.05, input_msg, nh);
    
-    Step 3: Calculate and print plane variances
+    // Step 3: Calculate and print plane variances
     for (size_t i = 0; i < plane_coefficients.size(); ++i)
     {
         pcl::PointCloud<pcl::PointXYZ>::Ptr current_plane(new pcl::PointCloud<pcl::PointXYZ>);

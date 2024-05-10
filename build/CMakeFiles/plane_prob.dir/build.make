@@ -288,6 +288,8 @@ devel/lib/stat_analysis/plane_prob: /usr/lib/x86_64-linux-gnu/libICE.so
 devel/lib/stat_analysis/plane_prob: /usr/lib/x86_64-linux-gnu/libX11.so
 devel/lib/stat_analysis/plane_prob: /usr/lib/x86_64-linux-gnu/libXext.so
 devel/lib/stat_analysis/plane_prob: /usr/lib/x86_64-linux-gnu/libXt.so
+devel/lib/stat_analysis/plane_prob: /usr/lib/gcc/x86_64-linux-gnu/9/libgomp.so
+devel/lib/stat_analysis/plane_prob: /usr/lib/x86_64-linux-gnu/libpthread.so
 devel/lib/stat_analysis/plane_prob: CMakeFiles/plane_prob.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/shovon/Desktop/catkin_ws/src/stat_analysis/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable devel/lib/stat_analysis/plane_prob"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/plane_prob.dir/link.txt --verbose=$(VERBOSE)
