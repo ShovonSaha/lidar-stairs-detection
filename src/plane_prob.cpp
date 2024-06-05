@@ -51,6 +51,7 @@ ros::Publisher pub_after_axis_downsampling;
 // ros::Publisher pub_after_sor;
 
 // Global vector to hold publishers for each cluster
+
 // Clusters are stored globally so that they can be accessed by other functions, 
 // such as Normal Extraction and clustering functions if required 
 std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> global_original_clusters;
@@ -61,6 +62,17 @@ std::vector<ros::Publisher> downsampled_cluster_publishers;
 // Vectors for storing the normals
 std::vector<pcl::PointCloud<pcl::Normal>::Ptr> global_original_normals;
 std::vector<pcl::PointCloud<pcl::Normal>::Ptr> global_downsampled_normals;
+
+// Plane Extraction: Define the data structure for storing planes for each cluster
+std::vector<std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>> planes_in_original_clusters;
+std::vector<std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>> planes_in_downsampled_clusters;
+
+struct ClusterPlanes {
+    std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> planes;
+};
+
+std::vector<ClusterPlanes> original_cluster_planes;
+std::vector<ClusterPlanes> downsampled_cluster_planes;
 
 
 typedef std::tuple<float, float, float> RGBColor;
@@ -294,12 +306,114 @@ void EuclideanClusteringAndDownsampleClusters(
     }
 }
 
+// ----------------------------------------------------------------------------------
+// PLANE SEGMENTATION
+// ----------------------------------------------------------------------------------
 
+void extractPlanesAndPrintInfo(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters, int max_iterations, double distance_threshold) {
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+    pcl::SACSegmentation<pcl::PointXYZ> seg;
+    seg.setOptimizeCoefficients(true);
+    seg.setModelType(pcl::SACMODEL_PLANE);
+    seg.setMethodType(pcl::SAC_RANSAC);
+    seg.setMaxIterations(max_iterations);
+    seg.setDistanceThreshold(distance_threshold);  // Set to appropriate threshold based on your data
+
+    for (size_t i = 0; i < clusters.size(); ++i) {
+        seg.setInputCloud(clusters[i]);
+        seg.segment(*inliers, *coefficients);
+
+        if (inliers->indices.size() == 0) {
+            ROS_WARN("Could not estimate a planar model for cluster %zu.", i);
+            continue;
+        }
+
+        pcl::ExtractIndices<pcl::PointXYZ> extract;
+        extract.setInputCloud(clusters[i]);
+        extract.setIndices(inliers);
+        extract.setNegative(true);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>());
+        extract.filter(*cloud_filtered);
+
+        // Store the number of inliers (plane points) and outliers
+        size_t num_inliers = inliers->indices.size();
+        size_t num_outliers = cloud_filtered->points.size();
+
+        clusters[i].swap(cloud_filtered);  // Now cluster contains only non-planar points
+
+        ROS_INFO("Cluster %zu: Plane extracted, inliers (plane points): %ld, outliers (remaining points): %ld", i, num_inliers, num_outliers);
+            
+        // ROS_INFO("Cluster %zu: Plane extracted, remaining points: %ld", i, clusters[i]->points.size());
+    }
+}
+
+
+void extractPlanes(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters,
+                   std::vector<ClusterPlanes>& plane_storage,
+                   int max_planes, int max_iterations, double distance_threshold) {
+    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+    pcl::SACSegmentation<pcl::PointXYZ> seg;
+    seg.setOptimizeCoefficients(true);
+    seg.setModelType(pcl::SACMODEL_PLANE);
+    seg.setMethodType(pcl::SAC_RANSAC);
+    seg.setMaxIterations(max_iterations);
+    seg.setDistanceThreshold(distance_threshold);
+
+    for (size_t i = 0; i < clusters.size(); ++i) {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr current_cluster = clusters[i];
+        std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> planes;
+
+        for (int j = 0; j < max_planes && current_cluster->points.size() > 3; ++j) {  // Ensure enough points
+            seg.setInputCloud(current_cluster);
+            seg.segment(*inliers, *coefficients);
+
+            if (inliers->indices.size() == 0) {
+                ROS_INFO("Cluster %zu: No more planes found after %d planes.", i, j);
+                break;  // No more significant planes
+            }
+
+            pcl::ExtractIndices<pcl::PointXYZ> extract;
+            extract.setInputCloud(current_cluster);
+            extract.setIndices(inliers);
+            extract.setNegative(false);
+            pcl::PointCloud<pcl::PointXYZ>::Ptr plane(new pcl::PointCloud<pcl::PointXYZ>());
+            extract.filter(*plane);
+            planes.push_back(plane);
+
+            // Report on the current plane
+            ROS_INFO("Cluster %zu, Plane %d: %ld points", i, j + 1, plane->points.size());
+
+            extract.setNegative(true);
+            pcl::PointCloud<pcl::PointXYZ>::Ptr temp(new pcl::PointCloud<pcl::PointXYZ>());
+            extract.filter(*temp);
+            current_cluster.swap(temp); // Update current_cluster with remaining points
+        }
+
+        // Store the planes for this cluster
+        plane_storage[i].planes = planes;
+        ROS_INFO("Cluster %zu: Total planes extracted: %lu", i, planes.size());
+        if (!current_cluster->points.empty()) {
+            ROS_INFO("Cluster %zu: Remaining outliers: %ld", i, current_cluster->points.size());
+        } else {
+            ROS_INFO("Cluster %zu: No outliers remaining", i);
+        }
+    }
+}
+
+
+
+
+
+// ----------------------------------------------------------------------------------
+// NORMAL EXTRACTION
+// ----------------------------------------------------------------------------------
 int determineKSearch(int numberOfPoints) {
     // Set a minimum k value
-    const int minK = 4;
+    const int minK = 2;
     // Set a maximum k value
-    const int maxK = 100;
+    const int maxK = 20;
 
     // Calculate k as a percentage of the number of points
     int k = std::max(minK, std::min(maxK, numberOfPoints / 10));
@@ -472,19 +586,51 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // stairway building code.
     // Minimum stairway width is 36 inch (~91 cm), since we're cropping our view dow
     // we can try to keep 2 points for width (y-axis), increasing leaf_y to ~40 cm
+
+
+    // --------------------------PLANE SEGMENTATION: -------------------------------------------
+
+    // Assuming `global_original_clusters` and `global_downsampled_clusters` are populated
+    planes_in_original_clusters.resize(global_original_clusters.size());
+    planes_in_downsampled_clusters.resize(global_downsampled_clusters.size());
+
+    // extractPlanesAndPrintInfo(global_original_clusters, 1000, 0.2);
+    // ROS_INFO("--------------------------------------"); // Creating a line 
+    // ros::Duration(1.0).sleep();
+
+
+    // extractPlanesAndPrintInfo(global_downsampled_clusters, 1000, 0.40);
+    // ROS_INFO("--------------------------------------"); // Creating a line 
+    // ros::Duration(1.0).sleep();
+    
     
     ROS_INFO("--------------------------------------"); // Creating a line 
                                                 // gap for better readability
 
-    // Introducing a delay for analyzing results
+    original_cluster_planes.resize(global_original_clusters.size());
+    downsampled_cluster_planes.resize(global_downsampled_clusters.size());
+
+    // Example usage
+    extractPlanes(global_original_clusters, original_cluster_planes, 2, 1000, 0.09);
+    ROS_INFO("--------------------------------------"); // Creating a line 
     ros::Duration(1.0).sleep();
+
+    // extractPlanes(global_downsampled_clusters, downsampled_cluster_planes, 2, 1000, 0.40);
+    // ROS_INFO("--------------------------------------"); // Creating a line 
+    // ros::Duration(1.0).sleep();
+
+    // ------------------------------------------------------
+
+    // Introducing a delay for analyzing results
+    // ros::Duration(1.0).sleep();
       
     
     // Estimate normals for the clusters
+
     // estimateNormalsForOriginalClusters();
-    estimateNormalsForDownsampledClusters();
+    // estimateNormalsForDownsampledClusters();
     
-    visualizeClustersWithNormals();
+    // visualizeClustersWithNormals();
 
 
     // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered = performStatisticalOutlierRemoval(cloud_after_axis_downsampling, 10, 2.0);
