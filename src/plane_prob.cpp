@@ -79,9 +79,6 @@ std::vector<std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>> planes_in_downsamp
 //     std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> planes;
 // };
 
-std::vector<ClusterPlanes> original_cluster_planes;
-std::vector<ClusterPlanes> downsampled_cluster_planes;
-
 struct PlaneData {
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud;
     Eigen::Vector4f coefficients; // Storing A, B, C, D of the plane equation
@@ -90,6 +87,11 @@ struct PlaneData {
 struct ClusterPlanes {
     std::vector<PlaneData> planes;
 };
+
+
+std::vector<ClusterPlanes> original_cluster_planes;
+std::vector<ClusterPlanes> downsampled_cluster_planes;
+
 
 // ----------------------------------------------------------------------------
 
@@ -368,6 +370,64 @@ void EuclideanClusteringAndDownsampleClusters(
 // }
 
 
+// void extractPlanes(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters,
+//                    std::vector<ClusterPlanes>& plane_storage,
+//                    int max_planes, int max_iterations, double distance_threshold) {
+//     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+//     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+//     pcl::SACSegmentation<pcl::PointXYZ> seg;
+//     seg.setOptimizeCoefficients(true);
+//     seg.setModelType(pcl::SACMODEL_PLANE);
+//     seg.setMethodType(pcl::SAC_RANSAC);
+//     seg.setMaxIterations(max_iterations);
+//     seg.setDistanceThreshold(distance_threshold);
+
+//     for (size_t i = 0; i < clusters.size(); ++i) {
+//         pcl::PointCloud<pcl::PointXYZ>::Ptr current_cluster = clusters[i];
+//         std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> planes;
+
+//         for (int j = 0; j < max_planes && current_cluster->points.size() > 3; ++j) {  // Ensure enough points
+//             seg.setInputCloud(current_cluster);
+//             seg.segment(*inliers, *coefficients);
+
+//             if (inliers->indices.size() == 0) {
+//                 ROS_INFO("Cluster %zu: No more planes found after %d planes.", i, j);
+//                 break;  // No more significant planes
+//             }
+
+//             pcl::ExtractIndices<pcl::PointXYZ> extract;
+//             extract.setInputCloud(current_cluster);
+//             extract.setIndices(inliers);
+//             extract.setNegative(false);
+//             pcl::PointCloud<pcl::PointXYZ>::Ptr plane(new pcl::PointCloud<pcl::PointXYZ>());
+//             extract.filter(*plane);
+//             planes.push_back(plane);
+
+//             // Report on the current plane
+//             ROS_INFO("Cluster %zu, Plane %d: %ld points", i, j + 1, plane->points.size());
+
+//             extract.setNegative(true);
+//             pcl::PointCloud<pcl::PointXYZ>::Ptr temp(new pcl::PointCloud<pcl::PointXYZ>());
+//             extract.filter(*temp);
+//             current_cluster.swap(temp); // Update current_cluster with remaining points
+//         }
+
+//         // Store the planes for this cluster
+//         plane_storage[i].planes = planes;
+//         ROS_INFO("Cluster %zu: Total planes extracted: %lu", i, planes.size());
+//         if (!current_cluster->points.empty()) {
+//             ROS_INFO("Cluster %zu: Remaining outliers: %ld", i, current_cluster->points.size());
+//         } else {
+//             ROS_INFO("Cluster %zu: No outliers remaining", i);
+//         }
+//         ROS_INFO(".............");
+//     }
+// }
+
+
+
+// ----------------------------------------------------------------------------------
+
 void extractPlanes(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters,
                    std::vector<ClusterPlanes>& plane_storage,
                    int max_planes, int max_iterations, double distance_threshold) {
@@ -382,7 +442,7 @@ void extractPlanes(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters,
 
     for (size_t i = 0; i < clusters.size(); ++i) {
         pcl::PointCloud<pcl::PointXYZ>::Ptr current_cluster = clusters[i];
-        std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> planes;
+        ClusterPlanes cluster_planes;
 
         for (int j = 0; j < max_planes && current_cluster->points.size() > 3; ++j) {  // Ensure enough points
             seg.setInputCloud(current_cluster);
@@ -393,26 +453,36 @@ void extractPlanes(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters,
                 break;  // No more significant planes
             }
 
+            PlaneData plane_data;
+            plane_data.cloud = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>);
             pcl::ExtractIndices<pcl::PointXYZ> extract;
             extract.setInputCloud(current_cluster);
             extract.setIndices(inliers);
             extract.setNegative(false);
-            pcl::PointCloud<pcl::PointXYZ>::Ptr plane(new pcl::PointCloud<pcl::PointXYZ>());
-            extract.filter(*plane);
-            planes.push_back(plane);
+            extract.filter(*plane_data.cloud);
+
+            if (coefficients->values.size() == 4) {
+                plane_data.coefficients = Eigen::Vector4f(coefficients->values[0], coefficients->values[1], coefficients->values[2], coefficients->values[3]);
+                ROS_INFO("Cluster %zu, Plane %d: Equation Ax + By + Cz + D = 0 -> %.3f*x + %.3f*y + %.3f*z + %.3f = 0",
+                         i, j + 1, coefficients->values[0], coefficients->values[1], coefficients->values[2], coefficients->values[3]);
+            }
 
             // Report on the current plane
-            ROS_INFO("Cluster %zu, Plane %d: %ld points", i, j + 1, plane->points.size());
+            ROS_INFO("Cluster %zu, Plane %d: %ld points", i, j + 1, plane_data.cloud->points.size());
 
             extract.setNegative(true);
             pcl::PointCloud<pcl::PointXYZ>::Ptr temp(new pcl::PointCloud<pcl::PointXYZ>());
             extract.filter(*temp);
             current_cluster.swap(temp); // Update current_cluster with remaining points
+
+            cluster_planes.planes.push_back(plane_data);
         }
 
         // Store the planes for this cluster
-        plane_storage[i].planes = planes;
-        ROS_INFO("Cluster %zu: Total planes extracted: %lu", i, planes.size());
+        plane_storage[i] = cluster_planes;
+        
+
+        ROS_INFO("Cluster %zu: Total planes extracted: %lu", i, cluster_planes.planes.size());
         if (!current_cluster->points.empty()) {
             ROS_INFO("Cluster %zu: Remaining outliers: %ld", i, current_cluster->points.size());
         } else {
@@ -427,29 +497,79 @@ void extractPlanes(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters,
 // PLANE VISUALIZATION WITH MARKER
 // ----------------------------------------------------------------------------------
 
+// void publishPlaneMarkers(const std::vector<ClusterPlanes>& plane_storage, ros::Publisher& marker_pub, const std::string& frame_id) {
+//     int marker_id = 0; // Unique ID for each marker
+
+//     for (size_t i = 0; i < plane_storage.size(); ++i) {
+//         for (size_t j = 0; j < plane_storage[i].planes.size(); ++j) {
+//             pcl::PointCloud<pcl::PointXYZ>::Ptr plane = plane_storage[i].planes[j].cloud;
+
+//             if (plane->points.empty()) continue;
+
+//             // Calculate centroid
+//             Eigen::Vector4f centroid;
+//             pcl::compute3DCentroid(*plane, centroid);
+
+//             // Calculate covariance matrix and extract orientation
+//             Eigen::Matrix3f covariance_matrix;
+//             pcl::computeCovarianceMatrixNormalized(*plane, centroid, covariance_matrix);
+//             Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance_matrix, Eigen::ComputeEigenvectors);
+//             Eigen::Matrix3f eig_dx = eigen_solver.eigenvectors();
+//             eig_dx.col(2) = eig_dx.col(0).cross(eig_dx.col(1));
+
+//             Eigen::Quaternionf q(eig_dx);
+
+//             // Create the marker
+//             visualization_msgs::Marker marker;
+//             marker.header.frame_id = frame_id;
+//             marker.header.stamp = ros::Time::now();
+//             marker.ns = "plane_markers";
+//             marker.id = marker_id++;
+//             marker.type = visualization_msgs::Marker::CUBE;
+//             marker.action = visualization_msgs::Marker::ADD;
+//             marker.pose.position.x = centroid[0];
+//             marker.pose.position.y = centroid[1];
+//             marker.pose.position.z = centroid[2];
+//             marker.pose.orientation.x = q.x();
+//             marker.pose.orientation.y = q.y();
+//             marker.pose.orientation.z = q.z();
+//             marker.pose.orientation.w = q.w();
+//             marker.scale.x = 0.2;  // Adjust the size according to your application
+//             marker.scale.y = 0.7;  // Adjust the size according to your application
+//             marker.scale.z = 0.2;  // This makes the marker flat
+//             marker.color.a = 0.4; // Don't forget to set the alpha!
+//             marker.color.r = 0.0;
+//             marker.color.g = 1.0;
+//             marker.color.b = 0.0;
+//             marker.lifetime = ros::Duration();
+
+//             // Publish the marker
+//             marker_pub.publish(marker);
+//         }
+//     }
+// }
+
+
+
 void publishPlaneMarkers(const std::vector<ClusterPlanes>& plane_storage, ros::Publisher& marker_pub, const std::string& frame_id) {
-    int marker_id = 0; // Unique ID for each marker
+    int marker_id = 0;
 
     for (size_t i = 0; i < plane_storage.size(); ++i) {
-        for (size_t j = 0; j < plane_storage[i].planes.size(); ++j) {
-            pcl::PointCloud<pcl::PointXYZ>::Ptr plane = plane_storage[i].planes[j];
+        int j = 0; // Initialize the plane index
+        for (const auto& plane : plane_storage[i].planes) {
+            if (plane.cloud->points.empty()) continue;
 
-            if (plane->points.empty()) continue;
-
-            // Calculate centroid
             Eigen::Vector4f centroid;
-            pcl::compute3DCentroid(*plane, centroid);
+            pcl::compute3DCentroid(*plane.cloud, centroid);
 
-            // Calculate covariance matrix and extract orientation
             Eigen::Matrix3f covariance_matrix;
-            pcl::computeCovarianceMatrixNormalized(*plane, centroid, covariance_matrix);
+            pcl::computeCovarianceMatrixNormalized(*plane.cloud, centroid, covariance_matrix);
             Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance_matrix, Eigen::ComputeEigenvectors);
             Eigen::Matrix3f eig_dx = eigen_solver.eigenvectors();
             eig_dx.col(2) = eig_dx.col(0).cross(eig_dx.col(1));
 
             Eigen::Quaternionf q(eig_dx);
 
-            // Create the marker
             visualization_msgs::Marker marker;
             marker.header.frame_id = frame_id;
             marker.header.stamp = ros::Time::now();
@@ -464,20 +584,23 @@ void publishPlaneMarkers(const std::vector<ClusterPlanes>& plane_storage, ros::P
             marker.pose.orientation.y = q.y();
             marker.pose.orientation.z = q.z();
             marker.pose.orientation.w = q.w();
-            marker.scale.x = 0.2;  // Adjust the size according to your application
-            marker.scale.y = 0.7;  // Adjust the size according to your application
-            marker.scale.z = 0.2;  // This makes the marker flat
-            marker.color.a = 0.4; // Don't forget to set the alpha!
+            marker.scale.x = 1.0; // Adjust based on the size of the plane
+            marker.scale.y = 1.0; // Adjust based on the size of the plane
+            marker.scale.z = 0.1; // Makes the marker flat
+            marker.color.a = 1.0; // Alpha, solid color
             marker.color.r = 0.0;
-            marker.color.g = 1.0;
+            marker.color.g = 1.0; // Green color
             marker.color.b = 0.0;
             marker.lifetime = ros::Duration();
 
-            // Publish the marker
             marker_pub.publish(marker);
+            ROS_INFO("Publishing marker for plane %d in cluster %zu with %d points", j, i, (int)plane.cloud->points.size());
+            j++; // Increment the plane index
         }
     }
 }
+
+
 
 // ----------------------------------------------------------------------------------
 // NORMAL EXTRACTION
@@ -683,14 +806,28 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // original_cluster_planes.resize(global_original_clusters.size());
     downsampled_cluster_planes.resize(global_downsampled_clusters.size());
 
-    // Example usage
+    // PLANE EXTRACTION
+    // extractPlanes(global_original_clusters, original_cluster_planes, 2, 1000, 0.09);
+    // ROS_INFO("--------------------------------------"); // Creating a line 
+    // ros::Duration(1.0).sleep();
+
+    // extractPlanes(global_downsampled_clusters, downsampled_cluster_planes, 2, 1000, 0.03);
+    // ROS_INFO("--------------------------------------"); // Creating a line 
+    
+    std::vector<ClusterPlanes> plane_storage;
     // extractPlanes(global_original_clusters, original_cluster_planes, 2, 1000, 0.09);
     // ROS_INFO("--------------------------------------"); // Creating a line 
     // ros::Duration(1.0).sleep();
 
     extractPlanes(global_downsampled_clusters, downsampled_cluster_planes, 2, 1000, 0.03);
     ROS_INFO("--------------------------------------"); // Creating a line 
+    
+    // Call to publish markers
+    publishPlaneMarkers(plane_storage, marker_pub, input_msg->header.frame_id);
+    ROS_INFO("Published Plane Markers");
+
     ros::Duration(1.0).sleep();
+    
 
     // ------------------------------------------------------
 
