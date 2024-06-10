@@ -269,6 +269,81 @@ bool customRegionGrowing(const PointTypeFull& point_a, const PointTypeFull& poin
 
 
 
+void EuclideanClusteringAndDownsampleClusters(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+    ros::NodeHandle& nh,
+    float cluster_tolerance,   // Adding cluster_tolerance parameter
+    float dw_leaf_size_x,
+    float dw_leaf_size_y,
+    float dw_leaf_size_z)
+{
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+    tree->setInputCloud(cloud);
+
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+    ec.setClusterTolerance(cluster_tolerance); // Use the parameterized cluster tolerance
+    ec.setMinClusterSize((cloud->size())/10);
+    ec.setMaxClusterSize(cloud->size()/2);
+    ec.setSearchMethod(tree);
+    ec.setInputCloud(cloud);
+    ec.extract(cluster_indices);
+
+    ROS_INFO("Number of clusters found: %d", static_cast<int>(cluster_indices.size()));
+
+    // Resize global vectors to hold new clusters and publishers
+    global_original_clusters.resize(cluster_indices.size());
+    global_downsampled_clusters.resize(cluster_indices.size());
+    original_cluster_publishers.resize(cluster_indices.size());
+    downsampled_cluster_publishers.resize(cluster_indices.size());
+
+    for (size_t i = 0; i < cluster_indices.size(); ++i) {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster(new pcl::PointCloud<pcl::PointXYZ>);
+        for (const auto& idx : cluster_indices[i].indices)
+            cloud_cluster->points.push_back(cloud->points[idx]);
+
+        cloud_cluster->width = cloud_cluster->points.size();
+        cloud_cluster->height = 1;
+        cloud_cluster->is_dense = true;
+        global_original_clusters[i] = cloud_cluster;
+
+        // Publish original cluster
+        std::string topic_name_original = "/original_cluster_" + std::to_string(i);
+        if (original_cluster_publishers[i].getTopic().empty()) {
+            original_cluster_publishers[i] = nh.advertise<sensor_msgs::PointCloud2>(topic_name_original, 1);
+        }
+
+        sensor_msgs::PointCloud2 output_original;
+        pcl::toROSMsg(*cloud_cluster, output_original);
+        output_original.header.frame_id = "map";
+        output_original.header.stamp = ros::Time::now();
+        original_cluster_publishers[i].publish(output_original);
+        
+        ROS_INFO("Original_Cluster %zu with %ld points", i, cloud_cluster->points.size());
+    
+
+        // Downsample the cluster and store it
+        pcl::PointCloud<pcl::PointXYZ>::Ptr downsampled_cluster = 
+                downsampleCluster(cloud_cluster, dw_leaf_size_x, dw_leaf_size_y, dw_leaf_size_z); //downsampling each of the clusters
+        global_downsampled_clusters[i] = downsampled_cluster;
+
+        // Publish downsampled cluster
+        std::string topic_name_downsampled = "/downsampled_cluster_" + std::to_string(i);
+        if (downsampled_cluster_publishers[i].getTopic().empty()) {
+            downsampled_cluster_publishers[i] = nh.advertise<sensor_msgs::PointCloud2>(topic_name_downsampled, 1);
+        }
+
+        sensor_msgs::PointCloud2 output_downsampled;
+        pcl::toROSMsg(*downsampled_cluster, output_downsampled);
+        output_downsampled.header.frame_id = "map";
+        output_downsampled.header.stamp = ros::Time::now();
+        downsampled_cluster_publishers[i].publish(output_downsampled);
+
+        ROS_INFO("DW_Cluster %zu with %ld points", i, downsampled_cluster->points.size());
+        ROS_INFO(" "); // Creating a line gap for better readability
+    }
+}
+
 void estimateNormalsAdaptivePCA(
     pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
     pcl::PointCloud<pcl::Normal>::Ptr& normals,
