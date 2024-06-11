@@ -1,40 +1,52 @@
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 
+
 #include <pcl/common/common.h>
 #include <pcl/common/io.h>
 #include <pcl/common/distances.h>
+#include <pcl/common/common_headers.h>
+#include <pcl/common/pca.h>
+#include <pcl/common/transforms.h>
+#include <pcl/common/centroid.h>
+
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
+
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/bilateral.h>
+
 #include <pcl/features/normal_3d.h>
 #include <pcl/visualization/pcl_visualizer.h>
+
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/segmentation/conditional_euclidean_clustering.h>
+
 #include <pcl/surface/mls.h>
-#include <pcl/common/transforms.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/io/pcd_io.h>
 #include <pcl/search/kdtree.h>
 #include <pcl/features/normal_3d_omp.h> // Use OpenMP version for faster computation
-#include <pcl/common/common_headers.h>
-#include <pcl/common/pca.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+
 
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
-#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/convert.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_eigen/tf2_eigen.h>
+
 #include <Eigen/Dense>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <eigen_conversions/eigen_msg.h>
+
 #include <cmath>
 #include <boost/make_shared.hpp> // For creating shared_ptr instances
 #include <algorithm>
@@ -279,11 +291,13 @@ void extractPlanes(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters,
     seg.setMaxIterations(max_iterations);
     seg.setDistanceThreshold(distance_threshold);
 
+    plane_storage.resize(clusters.size());  // Ensure plane_storage is ready to hold all clusters
+
     for (size_t i = 0; i < clusters.size(); ++i) {
         pcl::PointCloud<pcl::PointXYZ>::Ptr current_cluster = clusters[i];
         ClusterPlanes cluster_planes;
 
-        for (int j = 0; j < max_planes && current_cluster->points.size() > 3; ++j) {  // Ensure enough points
+        for (int j = 0; j < max_planes && current_cluster->points.size() > 3; ++j) {
             seg.setInputCloud(current_cluster);
             seg.segment(*inliers, *coefficients);
 
@@ -306,30 +320,25 @@ void extractPlanes(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters,
                          i, j + 1, coefficients->values[0], coefficients->values[1], coefficients->values[2], coefficients->values[3]);
             }
 
-            // Report on the current plane
-            ROS_INFO("Cluster %zu, Plane %d: %ld points", i, j + 1, plane_data.cloud->points.size());
-
+            cluster_planes.planes.push_back(plane_data);
             extract.setNegative(true);
             pcl::PointCloud<pcl::PointXYZ>::Ptr temp(new pcl::PointCloud<pcl::PointXYZ>());
             extract.filter(*temp);
             current_cluster.swap(temp); // Update current_cluster with remaining points
 
-            cluster_planes.planes.push_back(plane_data);
+            ROS_INFO("Added plane %u to cluster %zu", j, i);
         }
 
-        // Store the planes for this cluster
         plane_storage[i] = cluster_planes;
-        
-
         ROS_INFO("Cluster %zu: Total planes extracted: %lu", i, cluster_planes.planes.size());
         if (!current_cluster->points.empty()) {
             ROS_INFO("Cluster %zu: Remaining outliers: %ld", i, current_cluster->points.size());
         } else {
             ROS_INFO("Cluster %zu: No outliers remaining", i);
         }
-        ROS_INFO(".............");
     }
 }
+
 
 
 // ----------------------------------------------------------------------------------
@@ -443,25 +452,35 @@ void extractPlanes(std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr>& clusters,
 
 //  MARKER ARRAY 
 
+
 void publishPlaneMarkers(const std::vector<ClusterPlanes>& plane_storage, ros::Publisher& marker_pub, const std::string& frame_id) {
-    visualization_msgs::MarkerArray marker_array;
+    if (!marker_pub) {
+        ROS_ERROR("Marker publisher is not initialized!");
+        return;
+    }
+
+    ROS_INFO("Got into marker function");
+    ROS_INFO("Number of clusters to process: %lu", plane_storage.size());
+
     int marker_id = 0;
+    visualization_msgs::MarkerArray marker_array;
 
     for (size_t i = 0; i < plane_storage.size(); ++i) {
-        int j = 0; // Initialize the plane index
-        for (const auto& plane : plane_storage[i].planes) {
-            if (plane.cloud->points.empty()) continue;
+        ROS_INFO("Got into cluster %zu", i);
+
+        for (size_t j = 0; j < plane_storage[i].planes.size(); ++j) {
+            const auto& plane_data = plane_storage[i].planes[j];
+            
+            ROS_INFO("Got into plane %ld in cluster %zu", j, i);
+
+            if (plane_data.cloud->points.empty()) continue;
 
             Eigen::Vector4f centroid;
-            pcl::compute3DCentroid(*plane.cloud, centroid);
+            pcl::compute3DCentroid(*plane_data.cloud, centroid);
 
-            Eigen::Matrix3f covariance_matrix;
-            pcl::computeCovarianceMatrixNormalized(*plane.cloud, centroid, covariance_matrix);
-            Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(covariance_matrix, Eigen::ComputeEigenvectors);
-            Eigen::Matrix3f eig_dx = eigen_solver.eigenvectors();
-            eig_dx.col(2) = eig_dx.col(0).cross(eig_dx.col(1));  // Ensure right-handed coordinate system
-
-            Eigen::Quaternionf q(eig_dx);
+            Eigen::Vector3f normal(plane_data.coefficients[0], plane_data.coefficients[1], plane_data.coefficients[2]);
+            normal.normalize();
+            Eigen::Quaternionf quat = Eigen::Quaternionf::FromTwoVectors(Eigen::Vector3f(0, 0, 1), normal);
 
             visualization_msgs::Marker marker;
             marker.header.frame_id = frame_id;
@@ -473,31 +492,32 @@ void publishPlaneMarkers(const std::vector<ClusterPlanes>& plane_storage, ros::P
             marker.pose.position.x = centroid[0];
             marker.pose.position.y = centroid[1];
             marker.pose.position.z = centroid[2];
-            marker.pose.orientation.x = q.x();
-            marker.pose.orientation.y = q.y();
-            marker.pose.orientation.z = q.z();
-            marker.pose.orientation.w = q.w();
-            marker.scale.x = 0.2;  // Adjust the size according to your application
-            marker.scale.y = 0.7;  // Adjust the size according to your application
-            marker.scale.z = 0.2;  // This makes the marker flat
-            marker.color.a = 1.0; // Alpha, solid color
+            marker.pose.orientation.x = quat.x();
+            marker.pose.orientation.y = quat.y();
+            marker.pose.orientation.z = quat.z();
+            marker.pose.orientation.w = quat.w();
+            marker.scale.x = 0.20;
+            marker.scale.y = 0.70;
+            marker.scale.z = 0.02;
+            marker.color.a = 0.8;
             marker.color.r = 0.0;
-            marker.color.g = 1.0; // Green color
+            marker.color.g = 1.0;
             marker.color.b = 0.0;
             marker.lifetime = ros::Duration();
-
             marker_array.markers.push_back(marker);
-            ROS_INFO("Adding marker for plane %d in cluster %zu with %d points", j, i, (int)plane.cloud->points.size());
 
-            ROS_INFO("Publishing marker for plane %d in cluster %zu at (%f, %f, %f)", j, i, centroid[0], centroid[1], centroid[2]);
-            j++; // Increment the plane index
+            // marker_pub.publish(marker);
+            // ROS_INFO("Published marker for plane %ld in cluster %zu", j, i);
         }
     }
-
+    
     marker_pub.publish(marker_array);
-    ROS_INFO("Published %lu markers.", marker_array.markers.size());
-}
 
+    ROS_INFO("Publishing %lu markers.", marker_array.markers.size());
+    if (marker_array.markers.empty()) {
+        ROS_WARN("No markers to publish!");
+    }
+}
 
 
 
@@ -689,8 +709,6 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // original_cluster_planes.resize(global_original_clusters.size());
     downsampled_cluster_planes.resize(global_downsampled_clusters.size());
   
-    std::vector<ClusterPlanes> plane_storage;
-
     // Plane extraction with original clusters::
 
     // extractPlanes(global_original_clusters, original_cluster_planes, 2, 1000, 0.09);
@@ -699,14 +717,24 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
 
     // Plane extraction with downsampled clusters::
     extractPlanes(global_downsampled_clusters, downsampled_cluster_planes, 2, 1000, 0.03);
-    ROS_INFO("--------------------------------------"); // Creating a line 
+    ROS_INFO("--------------------------------------"); // Creating a line
+
+    // Prepare to publish markers for the clusters that have had planes extracted
+    ROS_INFO("Preparing to publish markers for %lu clusters.", downsampled_cluster_planes.size());
     
-    // Call to publish markers
-    publishPlaneMarkers(plane_storage, marker_pub, input_msg->header.frame_id);
+    int i =0;
+    for (const auto& cluster : downsampled_cluster_planes) {
+        ROS_INFO("Cluster %u has %lu planes.", i, cluster.planes.size());
+        i++;
+    }
+    
+    // // Call to publish markers
+    publishPlaneMarkers(downsampled_cluster_planes, marker_pub, input_msg->header.frame_id);
     ROS_INFO("Published Plane Markers");
 
-    ros::Duration(1.0).sleep();
     ROS_INFO("//////////////////////////////////////////////////////////////////////////");
+    ros::Duration(1.0).sleep();
+   
 
     // ------------------------------------------------------   
     
@@ -761,7 +789,8 @@ int main(int argc, char** argv) {
     // pub_after_sor = nh.advertise<sensor_msgs::PointCloud2>("/sor_filtered_cloud", 1);
     
     // marker_pub = nh.advertise<visualization_msgs::Marker>("visualization_marker", 10);
-    marker_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 1);
+    marker_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 10);
+
 
     // Subscribing to Lidar Sensor topic
     ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh)));

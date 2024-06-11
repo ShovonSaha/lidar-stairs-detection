@@ -48,7 +48,6 @@ find_package(Python3 REQUIRED COMPONENTS Development)
 # Set CMAKE_PREFIX_PATH to include the Python3 install path
 list(APPEND CMAKE_PREFIX_PATH ${Python3_DIR})
 
-
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -62,7 +61,6 @@ find_package(catkin REQUIRED COMPONENTS
   PCL REQUIRED
   # Python3 COMPONENTS Development
 )
-
 
 # find_package(PCL 1.9 REQUIRED COMPONENTS common io search)
 # find_package(FLANN REQUIRED)
@@ -166,6 +164,8 @@ catkin_package(
 #  LIBRARIES stat_analysis
 #  CATKIN_DEPENDS roscpp rospy sensor_msgs std_msgs
 #  DEPENDS system_lib
+# CATKIN_DEPENDS message_runtime roscpp rospy sensor_msgs std_msgs tf2_ros tf2_geometry_msgs
+
 )
 
 ###########
