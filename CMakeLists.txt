@@ -210,10 +210,13 @@ add_definitions(${PCL_DEFINITIONS})
 
 # add_executable(stair_det src/stair_det.cpp)
 
-add_executable(plane_prob src/plane_prob.cpp)
+# add_executable(plane_prob src/plane_prob.cpp)
 
 # add_executable(plane_prob_1 src/plane_prob_1.cpp)
-add_executable(robosense src/robosense.cpp)
+
+# add_executable(robosense src/robosense.cpp)
+
+add_executable(terrain src/terrain.cpp)
 
 # add_executable(pcl_viewer src/pcl_viewer.cpp)
 
@@ -265,26 +268,34 @@ add_executable(robosense src/robosense.cpp)
 # )
 
 # Linking libraries
-target_link_libraries(plane_prob 
-  ${catkin_LIBRARIES}
-  ${PCL_LIBRARIES}
-  mlpack
-  armadillo
-  OpenMP::OpenMP_CXX
-)
+# target_link_libraries(plane_prob 
+#   ${catkin_LIBRARIES}
+#   ${PCL_LIBRARIES}
+#   mlpack
+#   armadillo
+#   OpenMP::OpenMP_CXX
+# )
 
 # target_link_libraries(plane_prob_1 
 #   ${catkin_LIBRARIES}
 #   ${PCL_LIBRARIES}
 # )
-target_link_libraries(robosense 
+
+# target_link_libraries(robosense 
+#   ${catkin_LIBRARIES}
+#   ${PCL_LIBRARIES}
+#   mlpack
+#   armadillo
+#   OpenMP::OpenMP_CXX
+# )
+
+target_link_libraries(terrain 
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
   mlpack
   armadillo
   OpenMP::OpenMP_CXX
 )
-
 
 # target_link_libraries(pcl_viewer 
 #   ${catkin_LIBRARIES}
