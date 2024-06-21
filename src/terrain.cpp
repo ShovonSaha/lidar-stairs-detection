@@ -55,10 +55,11 @@
 #include <sstream>
 
 // ROS Publishers
+ros::Publisher pub_after_passthrough_x;
 ros::Publisher pub_after_passthrough_y;
-// ros::Publisher pub_after_passthrough_z;
-ros::Publisher pub_after_axis_downsampling;
-// ros::Publisher pub_after_sor;
+ros::Publisher pub_after_passthrough_z;
+ros::Publisher pub_after_downsampling;
+
 ros::Publisher marker_pub;
 
 std::vector<pcl::ModelCoefficients> plane_coefficients;
@@ -84,25 +85,27 @@ void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, con
     publisher.publish(output_msg);
 }
 
-// void visualizeNormals(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PointCloud<pcl::Normal>::Ptr& normals) {
-//     pcl::visualization::PCLVisualizer viewer("Normals Visualization");
-//     viewer.setBackgroundColor(0.05, 0.05, 0.05, 0); // Dark background for better visibility
-//     viewer.addPointCloud<pcl::PointXYZ>(cloud, "cloud");
 
-//     // Add normals to the viewer with a specific scale factor for better visibility
-//     viewer.addPointCloudNormals<pcl::PointXYZ, pcl::Normal>(cloud, normals, 10, 0.05, "normals");
+pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterX(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+{
+  pcl::PassThrough<pcl::PointXYZ> pass;
+  pass.setInputCloud(cloud);
+  pass.setFilterFieldName("x");
+  pass.setFilterLimits(0.0, 1.5);
 
-//     while (!viewer.wasStopped()) {
-//         viewer.spinOnce();
-//     }
-// }
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZ>);
+  pass.filter(*cloud_filtered_x);
+
+  return cloud_filtered_x;
+}
+
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterY(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
     pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("y");
-    pass.setFilterLimits(-0.7, 0.7);
+    pass.setFilterLimits(-0.3, 0.3);
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZ>);
     pass.filter(*cloud_filtered_y);
@@ -111,37 +114,36 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterY(const pcl::PointCloud<pcl
 }
 
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr downsamplingAlongAxis(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
-    const std::string& axis,
-    double min_limit,
-    double max_limit,
-    float leaf_size_x,  // Leaf size for x dimension
-    float leaf_size_y,   // Leaf size for y dimension
-    float leaf_size_z)   
+pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterZ(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
-    pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
-    voxel_grid.setInputCloud(cloud);
-    voxel_grid.setLeafSize(leaf_size_x, leaf_size_y, leaf_size_z);  // Use the same size for x and z, separate size for y
-    voxel_grid.setFilterFieldName(axis);
-    voxel_grid.setFilterLimits(min_limit, max_limit);
+    pcl::PassThrough<pcl::PointXYZ> pass;
+    pass.setInputCloud(cloud);
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(-0.7, 0.7);
 
-    // Create a new point cloud to store the downsampled points
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_downsampled(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_z(new pcl::PointCloud<pcl::PointXYZ>);
+    pass.filter(*cloud_filtered_z);
 
-    // Apply voxel grid downsampling
-    voxel_grid.filter(*cloud_downsampled);
-
-    // Update the width and height fields of the downsampled point cloud
-    cloud_downsampled->width = cloud_downsampled->size();
-    cloud_downsampled->height = 1;
-
-    return cloud_downsampled;
+    return cloud_filtered_z;
 }
 
 
+// Voxel Grid Downsampling
+pcl::PointCloud<pcl::PointXYZ>::Ptr voxelGridDownsampling(
+                                const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+                                    float leaf_size_x,  // Leaf size for x dimension
+                                    float leaf_size_y,   // Leaf size for y dimension
+                                    float leaf_size_z)   
+{
+  pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+  voxel_grid.setInputCloud(cloud);
+  voxel_grid.setLeafSize(leaf_size_x, leaf_size_y, leaf_size_z);
 
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_downsampled(new pcl::PointCloud<pcl::PointXYZ>);
+  voxel_grid.filter(*cloud_downsampled);
 
+  return cloud_downsampled;
+}
 
 
 
@@ -266,6 +268,49 @@ void visualizeNormals(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pc
 
 
 // ----------------------------------------------------------------------------------
+// NORMAL ANALYSIS
+// ----------------------------------------------------------------------------------
+
+
+// Perform PCA on Normals and visualize the results
+void performPCAAndVisualize(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PointCloud<pcl::Normal>::Ptr& normals) {
+    Eigen::MatrixXf data(normals->points.size(), 3);
+
+    for (size_t i = 0; i < normals->points.size(); ++i) {
+        data(i, 0) = normals->points[i].normal_x;
+        data(i, 1) = normals->points[i].normal_y;
+        data(i, 2) = normals->points[i].normal_z;
+    }
+
+    Eigen::MatrixXf centered = data.rowwise() - data.colwise().mean();
+    Eigen::MatrixXf cov = centered.adjoint() * centered;
+
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXf> eig(cov);
+    Eigen::Vector3f eigenvalues = eig.eigenvalues();
+    Eigen::Matrix3f eigenvectors = eig.eigenvectors();
+
+    std::cout << "Eigenvalues: \n" << eigenvalues << std::endl;
+    std::cout << "Eigenvectors: \n" << eigenvectors << std::endl;
+
+    // Visualize the principal components
+    pcl::visualization::PCLVisualizer viewer("PCA Visualization");
+    viewer.setBackgroundColor(0.05, 0.05, 0.05, 0); // Dark background for better visibility
+    viewer.addPointCloud<pcl::PointXYZ>(cloud, "cloud");
+
+    // Add the principal components as lines
+    pcl::PointXYZ center(0.0, 0.0, 0.0);
+    viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 0), eigenvectors(1, 0), eigenvectors(2, 0)), "principal_component_1");
+    viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 1), eigenvectors(1, 1), eigenvectors(2, 1)), "principal_component_2");
+    viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 2), eigenvectors(1, 2), eigenvectors(2, 2)), "principal_component_3");
+
+    while (!viewer.wasStopped()) {
+        viewer.spinOnce();
+    }
+}
+
+
+
+// ----------------------------------------------------------------------------------
 // POINTCLOUD CALLBACK
 // ----------------------------------------------------------------------------------
 
@@ -276,34 +321,45 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // Convert ROS PointCloud2 message to PCL PointCloud
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::fromROSMsg(*input_msg, *cloud);
+    ROS_INFO("Raw PointCloud: %ld points", cloud->points.size());
 
-    // Initial processing steps here (e.g., passthrough filtering, downsampling and )
-    // Passthrough Filtering with Y-Axis
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_y = passthroughFilterY(cloud);
-    publishProcessedCloud(cloud_after_passthrough_y, pub_after_passthrough_y, input_msg);
-    ROS_INFO("After Passthough filter: %ld points", cloud_after_passthrough_y->points.size());
+    // Passthrough Filtering with Z-Axis : Vertical axis
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_z = passthroughFilterZ(cloud);
+    publishProcessedCloud(cloud_after_passthrough_z, pub_after_passthrough_z, input_msg);
+    ROS_INFO("After Passthough filter Z: %ld points", cloud_after_passthrough_z->points.size());
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_axis_downsampling = downsamplingAlongAxis(
-    cloud_after_passthrough_y, "z", -2.0, 1, 0.40f, 0.005f, 0.40f); //cloud_after_passthrough_y, "z", -1.0, 2.5, 0.08f, 0.08f, 0.08f); works well with 0.05 tolerance in Euclidean clustering
+    // Passthrough Filtering with X-Axis : Depth axis
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_x = passthroughFilterX(cloud_after_passthrough_z);
+    publishProcessedCloud(cloud_after_passthrough_x, pub_after_passthrough_x, input_msg);
+    ROS_INFO("After Passthough filter X: %ld points", cloud_after_passthrough_x->points.size());
 
-    publishProcessedCloud(cloud_after_axis_downsampling, pub_after_axis_downsampling, input_msg);
+    // Passthrough Filtering with Y-Axis : Left-Right axis
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_y = passthroughFilterY(cloud_after_passthrough_x);
+    // publishProcessedCloud(cloud_after_passthrough_y, pub_after_passthrough_y, input_msg);
+    // ROS_INFO("After Passthough filter Y: %ld points", cloud_after_passthrough_y->points.size());
+
+    // Downsampling
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_downsampling = voxelGridDownsampling(
+        cloud_after_passthrough_x, 0.10f, 0.10f, 0.01f);
+    publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
 
     // // Log the number of points in the downsampled cloud directly
-    ROS_INFO("After Downsampling: %ld points", cloud_after_axis_downsampling->points.size());
+    ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
 
     // ROS_INFO(" "); // Creating a line gap for better readability
 
     // ------------------------------------------------------   
     
     // Normal Estimation
-    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_axis_downsampling, 50);
-    visualizeNormals(cloud_after_axis_downsampling, cloud_normals);
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_downsampling, 50);
+    // visualizeNormals(cloud_after_downsampling, cloud_normals);
+
+    // PCA and Visualization
+    performPCAAndVisualize(cloud_after_downsampling, cloud_normals);
 
     // Introducing a delay for analyzing results
-    ros::Duration(2.0).sleep();
-
-
     ROS_INFO("----------------------------------------------------------------");
+    ros::Duration(2.0).sleep();
 }
 
 
@@ -321,17 +377,13 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
 
     // Publishers
-    pub_after_passthrough_y = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_y", 1);
-    // pub_after_passthrough_z = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_z", 1);
-    // pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_x", 1);
-
-    pub_after_axis_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/axis_downsampled_cloud", 1);
+    pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_x", 1);
+    // pub_after_passthrough_y = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_y", 1);
+    pub_after_passthrough_z = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_z", 1);
+    
+    pub_after_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/downsampled_cloud", 1);
     // pub_after_sor = nh.advertise<sensor_msgs::PointCloud2>("/sor_filtered_cloud", 1);
     
-    // marker_pub = nh.advertise<visualization_msgs::Marker>("visualization_marker", 10);
-    marker_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 10);
-
-
     // Subscribing to Lidar Sensor topic
     // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh)));
     ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh)));
