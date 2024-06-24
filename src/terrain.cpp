@@ -53,6 +53,9 @@
 #include <limits>
 #include <vector>
 #include <sstream>
+#include <fstream> // For file operations
+#include <filesystem> // For checking folder existence
+#include <sys/stat.h> // For checking folder existence on some systems
 
 // ROS Publishers
 ros::Publisher pub_after_passthrough_x;
@@ -64,7 +67,10 @@ ros::Publisher marker_pub;
 
 std::vector<pcl::ModelCoefficients> plane_coefficients;
 
-
+const std::string FOLDER_PATH = "/home/shovon/Desktop/robosense_data/terrain/terrain_analysis";
+// std::string file_path = FOLDER_PATH + "/carpet_normals.csv";
+std::string file_path = FOLDER_PATH + "/plain_normals.csv";
+bool write_header = true;
 
 
 
@@ -152,76 +158,76 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr voxelGridDownsampling(
 // PLANE SEGMENTATION
 // ----------------------------------------------------------------------------------
 
-// Helper function to determine if two planes are similar
-bool is_similar_plane(const pcl::ModelCoefficients& plane1, const pcl::ModelCoefficients& plane2, double angle_threshold, double distance_threshold) {
-    Eigen::Vector3f normal1(plane1.values[0], plane1.values[1], plane1.values[2]);
-    Eigen::Vector3f normal2(plane2.values[0], plane2.values[1], plane2.values[2]);
-    double angle = acos(normal1.dot(normal2) / (normal1.norm() * normal2.norm()));
+// // Helper function to determine if two planes are similar
+// bool is_similar_plane(const pcl::ModelCoefficients& plane1, const pcl::ModelCoefficients& plane2, double angle_threshold, double distance_threshold) {
+//     Eigen::Vector3f normal1(plane1.values[0], plane1.values[1], plane1.values[2]);
+//     Eigen::Vector3f normal2(plane2.values[0], plane2.values[1], plane2.values[2]);
+//     double angle = acos(normal1.dot(normal2) / (normal1.norm() * normal2.norm()));
 
-    double distance1 = plane1.values[3] / normal1.norm();
-    double distance2 = plane2.values[3] / normal2.norm();
-    double distance_difference = fabs(distance1 - distance2);
+//     double distance1 = plane1.values[3] / normal1.norm();
+//     double distance2 = plane2.values[3] / normal2.norm();
+//     double distance_difference = fabs(distance1 - distance2);
 
-    return (angle < angle_threshold && distance_difference < distance_threshold);
-}
+//     return (angle < angle_threshold && distance_difference < distance_threshold);
+// }
 
-void extract_planes(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, float remaining_percentage, int max_planes, int max_iterations, double distance_threshold, double angle_threshold = 0.1) {
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::copyPointCloud(*cloud, *cloud_filtered);
+// void extract_planes(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, float remaining_percentage, int max_planes, int max_iterations, double distance_threshold, double angle_threshold = 0.1) {
+//     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
+//     pcl::copyPointCloud(*cloud, *cloud_filtered);
 
-    pcl::SACSegmentation<pcl::PointXYZ> seg;
-    pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-    pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
-    pcl::ExtractIndices<pcl::PointXYZ> extract;
+//     pcl::SACSegmentation<pcl::PointXYZ> seg;
+//     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+//     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+//     pcl::ExtractIndices<pcl::PointXYZ> extract;
 
-    seg.setOptimizeCoefficients(true);
-    seg.setModelType(pcl::SACMODEL_PLANE);
-    seg.setMethodType(pcl::SAC_RANSAC);
-    seg.setMaxIterations(max_iterations);
-    seg.setDistanceThreshold(distance_threshold);
+//     seg.setOptimizeCoefficients(true);
+//     seg.setModelType(pcl::SACMODEL_PLANE);
+//     seg.setMethodType(pcl::SAC_RANSAC);
+//     seg.setMaxIterations(max_iterations);
+//     seg.setDistanceThreshold(distance_threshold);
 
-    while (cloud_filtered->points.size() > remaining_percentage * cloud->points.size() && plane_coefficients.size() < max_planes) {
-        seg.setInputCloud(cloud_filtered);
-        seg.segment(*inliers, *coefficients);
+//     while (cloud_filtered->points.size() > remaining_percentage * cloud->points.size() && plane_coefficients.size() < max_planes) {
+//         seg.setInputCloud(cloud_filtered);
+//         seg.segment(*inliers, *coefficients);
 
-        if (inliers->indices.size() == 0) {
-            break;
-        }
+//         if (inliers->indices.size() == 0) {
+//             break;
+//         }
 
-        bool plane_updated = false;
-        for (auto& existing_coeff : plane_coefficients) {
-            if (is_similar_plane(existing_coeff, *coefficients, angle_threshold, (distance_threshold*5))) {
-                existing_coeff = *coefficients;  // Update the existing plane coefficients
-                plane_updated = true;
-                break;
-            }
-        }
+//         bool plane_updated = false;
+//         for (auto& existing_coeff : plane_coefficients) {
+//             if (is_similar_plane(existing_coeff, *coefficients, angle_threshold, (distance_threshold*5))) {
+//                 existing_coeff = *coefficients;  // Update the existing plane coefficients
+//                 plane_updated = true;
+//                 break;
+//             }
+//         }
 
-        if (!plane_updated) {
-            plane_coefficients.push_back(*coefficients);
-        }
+//         if (!plane_updated) {
+//             plane_coefficients.push_back(*coefficients);
+//         }
 
-        // Extract inliers (points belonging to the current plane) and update the cloud for the next iteration
-        extract.setInputCloud(cloud_filtered);
-        extract.setIndices(inliers);
-        extract.setNegative(true);  // Extract the points that are not inliers
-        extract.filter(*cloud_filtered);
-    }
+//         // Extract inliers (points belonging to the current plane) and update the cloud for the next iteration
+//         extract.setInputCloud(cloud_filtered);
+//         extract.setIndices(inliers);
+//         extract.setNegative(true);  // Extract the points that are not inliers
+//         extract.filter(*cloud_filtered);
+//     }
 
-    std::sort(plane_coefficients.begin(), plane_coefficients.end(), [](const pcl::ModelCoefficients& a, const pcl::ModelCoefficients& b) {
-        return a.values[3] < b.values[3];
-    });
+//     std::sort(plane_coefficients.begin(), plane_coefficients.end(), [](const pcl::ModelCoefficients& a, const pcl::ModelCoefficients& b) {
+//         return a.values[3] < b.values[3];
+//     });
 
-    // Print the number of planes and their equations
-    std::cout << "Number of planes found: " << plane_coefficients.size() << std::endl;
-    // for (size_t i = 0; i < plane_coefficients.size(); ++i) {
-    //     std::cout << "Plane " << i + 1 << ": " 
-    //               << plane_coefficients[i].values[0] << "x + "
-    //               << plane_coefficients[i].values[1] << "y + "
-    //               << plane_coefficients[i].values[2] << "z + "
-    //               << plane_coefficients[i].values[3] << " = 0" << std::endl;
-    // }
-}
+//     // Print the number of planes and their equations
+//     std::cout << "Number of planes found: " << plane_coefficients.size() << std::endl;
+//     // for (size_t i = 0; i < plane_coefficients.size(); ++i) {
+//     //     std::cout << "Plane " << i + 1 << ": " 
+//     //               << plane_coefficients[i].values[0] << "x + "
+//     //               << plane_coefficients[i].values[1] << "y + "
+//     //               << plane_coefficients[i].values[2] << "z + "
+//     //               << plane_coefficients[i].values[3] << " = 0" << std::endl;
+//     // }
+// }
 
 
 
@@ -272,8 +278,92 @@ void visualizeNormals(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pc
 // ----------------------------------------------------------------------------------
 
 
-// Perform PCA on Normals and visualize the results
-void performPCAAndVisualize(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PointCloud<pcl::Normal>::Ptr& normals) {
+// // Perform PCA on Normals and visualize the results
+// void performPCAAndVisualize(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PointCloud<pcl::Normal>::Ptr& normals) {
+//     Eigen::MatrixXf data(normals->points.size(), 3);
+
+//     for (size_t i = 0; i < normals->points.size(); ++i) {
+//         data(i, 0) = normals->points[i].normal_x;
+//         data(i, 1) = normals->points[i].normal_y;
+//         data(i, 2) = normals->points[i].normal_z;
+//     }
+
+//     Eigen::MatrixXf centered = data.rowwise() - data.colwise().mean();
+//     Eigen::MatrixXf cov = centered.adjoint() * centered;
+
+//     Eigen::SelfAdjointEigenSolver<Eigen::MatrixXf> eig(cov);
+//     Eigen::Vector3f eigenvalues = eig.eigenvalues();
+//     Eigen::Matrix3f eigenvectors = eig.eigenvectors();
+
+//     std::cout << "Eigenvalues: \n" << eigenvalues << std::endl;
+//     std::cout << "Eigenvectors: \n" << eigenvectors << std::endl;
+
+//     // Visualize the principal components
+//     pcl::visualization::PCLVisualizer viewer("PCA Visualization");
+//     viewer.setBackgroundColor(0.05, 0.05, 0.05, 0); // Dark background for better visibility
+//     viewer.addPointCloud<pcl::PointXYZ>(cloud, "cloud");
+
+//     // Add the principal components as lines
+//     pcl::PointXYZ center(0.0, 0.0, 0.0);
+//     viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 0), eigenvectors(1, 0), eigenvectors(2, 0)), "principal_component_1");
+//     viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 1), eigenvectors(1, 1), eigenvectors(2, 1)), "principal_component_2");
+//     viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 2), eigenvectors(1, 2), eigenvectors(2, 2)), "principal_component_3");
+
+//     while (!viewer.wasStopped()) {
+//         viewer.spinOnce();
+//     }
+// }
+
+
+// // Calculate and visualize standard deviations
+// void calculateAndVisualizeStandardDeviations(
+//     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+//     const pcl::PointCloud<pcl::Normal>::Ptr& normals) {
+//     Eigen::MatrixXf data(normals->points.size(), 3);
+
+//     for (size_t i = 0; i < normals->points.size(); ++i) {
+//         data(i, 0) = normals->points[i].normal_x;
+//         data(i, 1) = normals->points[i].normal_y;
+//         data(i, 2) = normals->points[i].normal_z;
+//     }
+
+//     Eigen::MatrixXf centered = data.rowwise() - data.colwise().mean();
+//     Eigen::MatrixXf cov = centered.adjoint() * centered;
+
+//     Eigen::SelfAdjointEigenSolver<Eigen::MatrixXf> eig(cov);
+//     Eigen::Vector3f eigenvalues = eig.eigenvalues();
+//     Eigen::Matrix3f eigenvectors = eig.eigenvectors();
+
+//     std::cout << "Eigenvalues: \n" << eigenvalues << std::endl;
+//     std::cout << "Eigenvectors: \n" << eigenvectors << std::endl;
+
+//     Eigen::Vector3f mean = data.colwise().mean();
+//     Eigen::Vector3f std_dev = ((data.rowwise() - mean.transpose()).array().square().colwise().sum() / (data.rows() - 1)).sqrt();
+
+//     std::cout << "Standard deviation of normals: \n" << std_dev << std::endl;
+
+//     // Visualize the results
+//     pcl::visualization::PCLVisualizer viewer("Standard Deviation Visualization");
+//     viewer.setBackgroundColor(0.05, 0.05, 0.05, 0); // Dark background for better visibility
+//     viewer.addPointCloud<pcl::PointXYZ>(cloud, "cloud");
+
+//     // Add the principal components as lines
+//     pcl::PointXYZ center(0.0, 0.0, 0.0);
+//     viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 0), eigenvectors(1, 0), eigenvectors(2, 0)), "principal_component_1");
+//     viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 1), eigenvectors(1, 1), eigenvectors(2, 1)), "principal_component_2");
+//     viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 2), eigenvectors(1, 2), eigenvectors(2, 2)), "principal_component_3");
+
+//     while (!viewer.wasStopped()) {
+//         viewer.spinOnce();
+//     }
+// }
+
+
+// Calculate and save eigenvalues and eigenvectors to a CSV file
+void calculateAndSavePCAResults(
+    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+    const pcl::PointCloud<pcl::Normal>::Ptr& normals,
+    const std::string& folder_path, bool write_header = false) {
     Eigen::MatrixXf data(normals->points.size(), 3);
 
     for (size_t i = 0; i < normals->points.size(); ++i) {
@@ -292,23 +382,53 @@ void performPCAAndVisualize(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, co
     std::cout << "Eigenvalues: \n" << eigenvalues << std::endl;
     std::cout << "Eigenvectors: \n" << eigenvectors << std::endl;
 
-    // Visualize the principal components
-    pcl::visualization::PCLVisualizer viewer("PCA Visualization");
-    viewer.setBackgroundColor(0.05, 0.05, 0.05, 0); // Dark background for better visibility
-    viewer.addPointCloud<pcl::PointXYZ>(cloud, "cloud");
+    Eigen::Vector3f mean = data.colwise().mean();
+    Eigen::Vector3f std_dev = ((data.rowwise() - mean.transpose()).array().square().colwise().sum() / (data.rows() - 1)).sqrt();
 
-    // Add the principal components as lines
-    pcl::PointXYZ center(0.0, 0.0, 0.0);
-    viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 0), eigenvectors(1, 0), eigenvectors(2, 0)), "principal_component_1");
-    viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 1), eigenvectors(1, 1), eigenvectors(2, 1)), "principal_component_2");
-    viewer.addLine<pcl::PointXYZ>(center, pcl::PointXYZ(eigenvectors(0, 2), eigenvectors(1, 2), eigenvectors(2, 2)), "principal_component_3");
+    std::cout << "Standard deviation of normals: \n" << std_dev << std::endl;
 
-    while (!viewer.wasStopped()) {
-        viewer.spinOnce();
+    // Save results to a CSV file
+    // std::string file_path = folder_path + "/pca_results.csv";
+
+    std::ofstream file(file_path, std::ios_base::app); // Append mode. File name being saved globally
+
+    if (file.is_open()) {
+        if (write_header) {
+            file << "Eigenvalue1,Eigenvalue2,Eigenvalue3,Eigenvector1_x,Eigenvector1_y,Eigenvector1_z,"
+                 << "Eigenvector2_x,Eigenvector2_y,Eigenvector2_z,Eigenvector3_x,Eigenvector3_y,Eigenvector3_z,"
+                 << "StdDev_NormalX,StdDev_NormalY,StdDev_NormalZ\n";
+        }
+        file << eigenvalues(0) << "," << eigenvalues(1) << "," << eigenvalues(2) << ","
+             << eigenvectors(0, 0) << "," << eigenvectors(1, 0) << "," << eigenvectors(2, 0) << ","
+             << eigenvectors(0, 1) << "," << eigenvectors(1, 1) << "," << eigenvectors(2, 1) << ","
+             << eigenvectors(0, 2) << "," << eigenvectors(1, 2) << "," << eigenvectors(2, 2) << ","
+             << std_dev(0) << "," << std_dev(1) << "," << std_dev(2) << "\n";
+        file.close();
+        std::cout << "PCA results saved to " << file_path << std::endl;
+    } else {
+        std::cerr << "Unable to open file to save PCA results." << std::endl;
     }
 }
 
 
+// Calculate and save normals to a CSV file
+void calculateAndSaveNormals(const pcl::PointCloud<pcl::Normal>::Ptr& normals, const std::string& file_path) {
+    std::ofstream file(file_path, std::ios_base::app); // Append mode
+    if (file.is_open()) {
+        if (write_header) {
+            file << "NormalX,NormalY,NormalZ\n";
+        }
+        for (size_t i = 0; i < normals->points.size(); ++i) {
+            file << normals->points[i].normal_x << ","
+                 << normals->points[i].normal_y << ","
+                 << normals->points[i].normal_z << "\n";
+        }
+        file.close();
+        std::cout << "Normals saved to " << file_path << std::endl;
+    } else {
+        std::cerr << "Unable to open file to save normals." << std::endl;
+    }
+}
 
 // ----------------------------------------------------------------------------------
 // POINTCLOUD CALLBACK
@@ -321,17 +441,17 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // Convert ROS PointCloud2 message to PCL PointCloud
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::fromROSMsg(*input_msg, *cloud);
-    ROS_INFO("Raw PointCloud: %ld points", cloud->points.size());
+    // ROS_INFO("Raw PointCloud: %ld points", cloud->points.size());
 
     // Passthrough Filtering with Z-Axis : Vertical axis
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_z = passthroughFilterZ(cloud);
     publishProcessedCloud(cloud_after_passthrough_z, pub_after_passthrough_z, input_msg);
-    ROS_INFO("After Passthough filter Z: %ld points", cloud_after_passthrough_z->points.size());
+    // ROS_INFO("After Passthough filter Z: %ld points", cloud_after_passthrough_z->points.size());
 
     // Passthrough Filtering with X-Axis : Depth axis
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_x = passthroughFilterX(cloud_after_passthrough_z);
     publishProcessedCloud(cloud_after_passthrough_x, pub_after_passthrough_x, input_msg);
-    ROS_INFO("After Passthough filter X: %ld points", cloud_after_passthrough_x->points.size());
+    // ROS_INFO("After Passthough filter X: %ld points", cloud_after_passthrough_x->points.size());
 
     // Passthrough Filtering with Y-Axis : Left-Right axis
     // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_y = passthroughFilterY(cloud_after_passthrough_x);
@@ -344,7 +464,7 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
 
     // // Log the number of points in the downsampled cloud directly
-    ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
+    // ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
 
     // ROS_INFO(" "); // Creating a line gap for better readability
 
@@ -355,11 +475,20 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // visualizeNormals(cloud_after_downsampling, cloud_normals);
 
     // PCA and Visualization
-    performPCAAndVisualize(cloud_after_downsampling, cloud_normals);
+    // performPCAAndVisualize(cloud_after_downsampling, cloud_normals);
+
+    // calculateAndVisualizeStandardDeviations(cloud_after_downsampling, cloud_normals);
+
+    // PCA and Save Results
+    // calculateAndSavePCAResults(cloud_after_downsampling, cloud_normals, FOLDER_PATH, write_header);
+
+    // Saving the normals directly in the csv file. PCA will be done on the python end.
+    calculateAndSaveNormals(cloud_normals, file_path);
+    write_header = false; // Ensure header is only written once
 
     // Introducing a delay for analyzing results
     ROS_INFO("----------------------------------------------------------------");
-    ros::Duration(2.0).sleep();
+    // ros::Duration(0.5).sleep();
 }
 
 
@@ -375,6 +504,21 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
 int main(int argc, char** argv) {
     ros::init(argc, argv, "pcl_node");
     ros::NodeHandle nh;
+
+    // Check if the folder exists
+    struct stat info;
+    if (stat(FOLDER_PATH.c_str(), &info) != 0) {
+        ROS_ERROR("The provided folder path does not exist.");
+        return -1;
+    }
+
+    // Remove existing CSV file if it exists
+    std::string file_path = FOLDER_PATH + "/pca_results.csv";
+    if (std::remove(file_path.c_str()) == 0) {
+        ROS_INFO("Removed existing file: %s", file_path.c_str());
+    }
+
+    // bool write_header = true;
 
     // Publishers
     pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_x", 1);
