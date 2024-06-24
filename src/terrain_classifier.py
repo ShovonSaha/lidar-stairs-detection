@@ -8,6 +8,7 @@ from sklearn.metrics import accuracy_score, classification_report
 import matplotlib.pyplot as plt
 
 def prepare_data(folder_path, filenames, labels):
+    print("Preparing data...")
     all_data = []
     all_labels = []
 
@@ -21,6 +22,7 @@ def prepare_data(folder_path, filenames, labels):
 
         try:
             data = pd.read_csv(file_path)
+            print(f"Loaded data from {file_path}")
 
             # Extract the normals for PCA
             if {'NormalX', 'NormalY', 'NormalZ'}.issubset(data.columns):
@@ -31,6 +33,7 @@ def prepare_data(folder_path, filenames, labels):
             # Perform PCA on the normals
             pca = PCA(n_components=2)
             pca_result = pca.fit_transform(normals)
+            print(f"Performed PCA on normals from {file_path}")
 
             # Append the PCA results and labels
             all_data.append(pca_result)
@@ -43,6 +46,7 @@ def prepare_data(folder_path, filenames, labels):
     X = np.vstack(all_data)
     y = np.hstack(all_labels)
 
+    print("Data preparation complete.")
     return X, y
 
 def plot_decision_boundary(X, y, clf, ax):
@@ -69,16 +73,21 @@ def main():
 
     # Prepare the data
     X, y = prepare_data(folder_path, filenames, labels)
+    print("Shape of data:", X.shape)
+    print("Shape of labels:", y.shape)
 
     # Split the data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    print("Data split into training and testing sets.")
 
     # Train the classifier
     clf = SVC(kernel='linear')
     clf.fit(X_train, y_train)
+    print("Classifier trained.")
 
     # Make predictions
     y_pred = clf.predict(X_test)
+    print("Predictions made.")
 
     # Evaluate the classifier
     print("Accuracy:", accuracy_score(y_test, y_pred))
