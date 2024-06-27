@@ -57,27 +57,34 @@ def plot_decision_boundary(X, y, clf, ax):
     Z = Z.reshape(xx.shape)
     
     ax.contourf(xx, yy, Z, alpha=0.3)
-    scatter = ax.scatter(X[:, 0], X[:, 1], c=y, s=20, edgecolor='k')
+    scatter = ax.scatter(X[:, 0], X[:, 1], c=y, s=20, edgecolor='k', cmap=plt.cm.Paired)
     legend1 = ax.legend(*scatter.legend_elements(), title="Classes")
     ax.add_artist(legend1)
 
 def main():
-    # Path to the folder containing the CSV files
-    folder_path = "/home/shovon/Desktop/robosense_data/terrain/terrain_analysis"
+    # Path to the folder containing the CSV files: 
+    # folder_path = "/home/shovon/Desktop/robosense_data/terrain/terrain_analysis"
+    folder_path = "/home/shovon/Desktop/robosense_data/terrain/grass_concrete_collection/terrain_analysis/"
 
     # List of CSV files for different terrains
-    filenames = ['carpet_normals.csv', 'plain_normals.csv']
+    # filenames = ['carpet_normals.csv', 'plain_normals.csv']
+    filenames = ['grass.csv', 'plain_normals.csv']
 
     # Labels for each terrain type
-    labels = ['Carpet', 'Plain']
+    # labels = ['Carpet', 'Plain']
+    labels = ['Grass', 'Plain']
 
     # Prepare the data
     X, y = prepare_data(folder_path, filenames, labels)
     print("Shape of data:", X.shape)
     print("Shape of labels:", y.shape)
 
+    # Convert string labels to numeric
+    label_map = {label: idx for idx, label in enumerate(set(y))}
+    y_numeric = np.array([label_map[label] for label in y])
+
     # Split the data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y_numeric, test_size=0.3, random_state=42)
     print("Data split into training and testing sets.")
 
     # Train the classifier
@@ -92,7 +99,7 @@ def main():
     # Evaluate the classifier
     print("Accuracy:", accuracy_score(y_test, y_pred))
     print("Classification Report:")
-    print(classification_report(y_test, y_pred))
+    print(classification_report(y_test, y_pred, zero_division=0))
 
     # Plot the decision boundary
     fig, ax = plt.subplots()

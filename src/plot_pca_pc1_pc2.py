@@ -44,8 +44,12 @@ def plot_pca_2d(file_path):
 if __name__ == "__main__":
     
     # Path to the CSV file
-    folder_path = "/home/shovon/Desktop/robosense_data/terrain/terrain_analysis"
-    file_path = os.path.join(folder_path, 'carpet_normals.csv')
+    # folder_path = "/home/shovon/Desktop/robosense_data/terrain/terrain_analysis"
+    # file_path = os.path.join(folder_path, 'concrete.csv')
+    
+    folder_path = "/home/shovon/Desktop/robosense_data/terrain/grass_concrete_collection/terrain_analysis"
+    file_path = os.path.join(folder_path, 'concrete_soft_plants.csv')
+    
 
     # Call the function to plot PCA
     plot_pca_2d(file_path)
