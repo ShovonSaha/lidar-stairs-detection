@@ -12,7 +12,7 @@ project(stat_analysis)
 # set(CMAKE_CXX_FLAGS_DEBUG "-g")
 # set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
-# Optimize the build for speed
+# Optimize the build for speed - Level 3 Optimization
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 
@@ -210,13 +210,13 @@ add_definitions(${PCL_DEFINITIONS})
 
 # add_executable(stair_det src/stair_det.cpp)
 
-# add_executable(plane_prob src/plane_prob.cpp)
+add_executable(plane_prob src/plane_prob.cpp)   # Main Plane extraction algorithm for stair detection
 
 # add_executable(plane_prob_1 src/plane_prob_1.cpp)
 
 # add_executable(robosense src/robosense.cpp)
 
-add_executable(terrain src/terrain.cpp)
+add_executable(terrain src/terrain.cpp) # Saves values in csv files for in-depth terrain classification algorithm (done later on python) 
 
 # add_executable(pcl_viewer src/pcl_viewer.cpp)
 
@@ -261,11 +261,11 @@ add_executable(terrain src/terrain.cpp)
 
 
 
-# target_link_libraries(plane_prob 
-#   ${catkin_LIBRARIES}
-#   ${PCL_LIBRARIES}
-#   ${MLPACK_LIBRARIES}
-# )
+target_link_libraries(plane_prob 
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${MLPACK_LIBRARIES}
+)
 
 # Linking libraries
 # target_link_libraries(plane_prob 
