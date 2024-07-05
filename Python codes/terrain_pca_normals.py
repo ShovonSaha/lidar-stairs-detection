@@ -4,6 +4,7 @@ import os
 import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.metrics import classification_report, accuracy_score
 
@@ -63,11 +64,22 @@ def plot_pca_results(data, labels, colors, labels_names, save_path):
     print(f"PCA 2D plot saved as {save_path}")
 
 def train_and_test_classifier(data, labels):
+    # Split the data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(data, labels, test_size=0.3, random_state=42)
-    classifier = SVC(kernel='linear')
-    classifier.fit(X_train, y_train)
+
+    # Further split the training set to use only 1/10th of it
+    X_train_small, _, y_train_small, _ = train_test_split(X_train, y_train, test_size=0.9, random_state=42)
+
+    # Standardize the data
+    scaler = StandardScaler()
+    X_train_small = scaler.fit_transform(X_train_small)
+    X_test = scaler.transform(X_test)
+
+    # Use a polynomial SVM with a lower degree
+    classifier = SVC(kernel='poly', degree=2, gamma='auto', C=1.0)
+    classifier.fit(X_train_small, y_train_small)
     y_pred = classifier.predict(X_test)
-    return X_train, X_test, y_train, y_test, y_pred, classifier
+    return X_train_small, X_test, y_train_small, y_test, y_pred, classifier
 
 def plot_classification_results(classifier, data, labels, colors, labels_names, save_path):
     h = .02  # step size in the mesh
@@ -107,8 +119,8 @@ if __name__ == "__main__":
 
     data, labels = read_and_process_data(folder_path, filenames)
 
-    pca_plot_path = os.path.join(folder_path, 'combined_pca_2d_plot.png')
-    plot_pca_results(data, labels, colors, labels_names, pca_plot_path)
+    # pca_plot_path = os.path.join(folder_path, 'combined_pca_2d_plot.png')
+    # plot_pca_results(data, labels, colors, labels_names, pca_plot_path)
 
     X_train, X_test, y_train, y_test, y_pred, classifier = train_and_test_classifier(data, labels)
 
