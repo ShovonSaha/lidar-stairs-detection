@@ -193,7 +193,7 @@ if __name__ == "__main__":
     }
     colors = ['blue', 'green']
     labels_names = ['Grass', 'Plain']
-    percent_data = 5
+    percent_data = 100
 
     # Read and process data
     print("Starting data processing...")
@@ -222,17 +222,17 @@ if __name__ == "__main__":
 
     # ---------------------------------------------------------------------------------------------------------------
 
-    # Apply PCA and plot results for n=3
-    print("Starting PCA with 3 components and plotting results...")
-    pca_data_3 = apply_pca_3(data)
-    pca_plot_path_3d = os.path.join(folder_path, 'combined_pca_3d_plot.png')
-    # plot_pca_results_3d(pca_data_3, labels, colors, labels_names, pca_plot_path_3d)
-    print("PCA with 3 components and plotting completed.")
+    # # Apply PCA and plot results for n=3
+    # print("Starting PCA with 3 components and plotting results...")
+    # pca_data_3 = apply_pca_3(data)
+    # pca_plot_path_3d = os.path.join(folder_path, 'combined_pca_3d_plot.png')
+    # # plot_pca_results_3d(pca_data_3, labels, colors, labels_names, pca_plot_path_3d)
+    # print("PCA with 3 components and plotting completed.")
 
-    # Train and test classifier
-    print("Starting classifier training and testing...")
-    X_train, X_test, y_train, y_test, y_pred, classifier = train_and_test_classifier(pca_data_3, labels)
-    print("Classifier training and testing completed.")
+    # # Train and test classifier
+    # print("Starting classifier training and testing...")
+    # X_train, X_test, y_train, y_test, y_pred, classifier = train_and_test_classifier(pca_data_3, labels)
+    # print("Classifier training and testing completed.")
 
     # # Plot classification results for n=3
     # print("Plotting classification results for 3 components...")

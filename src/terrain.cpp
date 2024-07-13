@@ -59,16 +59,17 @@
 
 // ROS Publishers
 ros::Publisher pub_after_passthrough_x;
-ros::Publisher pub_after_passthrough_y;
+// ros::Publisher pub_after_passthrough_y;
 ros::Publisher pub_after_passthrough_z;
-ros::Publisher pub_after_downsampling;
+// ros::Publisher pub_after_downsampling;
+ros::Publisher pub_after_low_pass;
 
 ros::Publisher marker_pub;
 
 std::vector<pcl::ModelCoefficients> plane_coefficients;
 
 // const std::string FOLDER_PATH = "/home/shovon/Desktop/robosense_data/terrain/terrain_analysis";
-const std::string FOLDER_PATH = "/home/shovon/Desktop/robosense_data/terrain/grass_concrete_collection/terrain_analysis";
+const std::string FOLDER_PATH = "/home/nrelab-titan/Desktop/shovon/data/rosbags";
 
 // std::string file_path = FOLDER_PATH + "/carpet_normals.csv";
 // std::string file_path = FOLDER_PATH + "/plain_normals.csv";
@@ -98,35 +99,7 @@ void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, con
     publisher.publish(output_msg);
 }
 
-
-pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterX(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
-{
-  pcl::PassThrough<pcl::PointXYZ> pass;
-  pass.setInputCloud(cloud);
-  pass.setFilterFieldName("x");
-  pass.setFilterLimits(1.5, 2.5);
-
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZ>);
-  pass.filter(*cloud_filtered_x);
-
-  return cloud_filtered_x;
-}
-
-
-pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterY(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
-{
-    pcl::PassThrough<pcl::PointXYZ> pass;
-    pass.setInputCloud(cloud);
-    pass.setFilterFieldName("y");
-    pass.setFilterLimits(-0.3, 0.3);
-
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZ>);
-    pass.filter(*cloud_filtered_y);
-
-    return cloud_filtered_y;
-}
-
-
+// First stage filter
 pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterZ(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
     pcl::PassThrough<pcl::PointXYZ> pass;
@@ -139,6 +112,55 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterZ(const pcl::PointCloud<pcl
 
     return cloud_filtered_z;
 }
+
+// Second stage filter
+pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterX(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+{
+  pcl::PassThrough<pcl::PointXYZ> pass;
+  pass.setInputCloud(cloud);
+  pass.setFilterFieldName("x");
+//   pass.setFilterLimits(1, 1.5);
+  pass.setFilterLimits(0, 2.5); // For capturing a longer length of data
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZ>);
+  pass.filter(*cloud_filtered_x);
+
+  return cloud_filtered_x;
+}
+
+
+// pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterY(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+// {
+//     pcl::PassThrough<pcl::PointXYZ> pass;
+//     pass.setInputCloud(cloud);
+//     pass.setFilterFieldName("y");
+//     pass.setFilterLimits(-0.3, 0.3);
+
+//     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZ>);
+//     pass.filter(*cloud_filtered_y);
+
+//     return cloud_filtered_y;
+// }
+
+
+
+// Low-Pass Filter using Moving Least Squares (MLS)
+pcl::PointCloud<pcl::PointXYZ>::Ptr lowPassFilterMLS(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+{
+    pcl::MovingLeastSquares<pcl::PointXYZ, pcl::PointXYZ> mls;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_smoothed(new pcl::PointCloud<pcl::PointXYZ>);
+
+    mls.setInputCloud(cloud);
+    mls.setComputeNormals(false);
+    mls.setPolynomialOrder(1);  // Set the polynomial order for the MLS algorithm
+    mls.setSearchMethod(pcl::search::KdTree<pcl::PointXYZ>::Ptr(new pcl::search::KdTree<pcl::PointXYZ>));
+    mls.setSearchRadius(0.03);  // Set the search radius for the MLS algorithm
+
+    mls.process(*cloud_smoothed);
+
+    return cloud_smoothed;
+}
+
 
 
 // Voxel Grid Downsampling
@@ -285,56 +307,56 @@ void visualizeNormals(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pc
 // ----------------------------------------------------------------------------------
 
 
-// Calculate and save eigenvalues and eigenvectors to a CSV file
-void calculateAndSavePCAResults(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
-    const pcl::PointCloud<pcl::Normal>::Ptr& normals,
-    const std::string& folder_path, bool write_header = false) {
-    Eigen::MatrixXf data(normals->points.size(), 3);
+// // Calculate and save eigenvalues and eigenvectors to a CSV file
+// void calculateAndSavePCAResults(
+//     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+//     const pcl::PointCloud<pcl::Normal>::Ptr& normals,
+//     const std::string& folder_path, bool write_header = false) {
+//     Eigen::MatrixXf data(normals->points.size(), 3);
 
-    for (size_t i = 0; i < normals->points.size(); ++i) {
-        data(i, 0) = normals->points[i].normal_x;
-        data(i, 1) = normals->points[i].normal_y;
-        data(i, 2) = normals->points[i].normal_z;
-    }
+//     for (size_t i = 0; i < normals->points.size(); ++i) {
+//         data(i, 0) = normals->points[i].normal_x;
+//         data(i, 1) = normals->points[i].normal_y;
+//         data(i, 2) = normals->points[i].normal_z;
+//     }
 
-    Eigen::MatrixXf centered = data.rowwise() - data.colwise().mean();
-    Eigen::MatrixXf cov = centered.adjoint() * centered;
+//     Eigen::MatrixXf centered = data.rowwise() - data.colwise().mean();
+//     Eigen::MatrixXf cov = centered.adjoint() * centered;
 
-    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXf> eig(cov);
-    Eigen::Vector3f eigenvalues = eig.eigenvalues();
-    Eigen::Matrix3f eigenvectors = eig.eigenvectors();
+//     Eigen::SelfAdjointEigenSolver<Eigen::MatrixXf> eig(cov);
+//     Eigen::Vector3f eigenvalues = eig.eigenvalues();
+//     Eigen::Matrix3f eigenvectors = eig.eigenvectors();
 
-    std::cout << "Eigenvalues: \n" << eigenvalues << std::endl;
-    std::cout << "Eigenvectors: \n" << eigenvectors << std::endl;
+//     std::cout << "Eigenvalues: \n" << eigenvalues << std::endl;
+//     std::cout << "Eigenvectors: \n" << eigenvectors << std::endl;
 
-    Eigen::Vector3f mean = data.colwise().mean();
-    Eigen::Vector3f std_dev = ((data.rowwise() - mean.transpose()).array().square().colwise().sum() / (data.rows() - 1)).sqrt();
+//     Eigen::Vector3f mean = data.colwise().mean();
+//     Eigen::Vector3f std_dev = ((data.rowwise() - mean.transpose()).array().square().colwise().sum() / (data.rows() - 1)).sqrt();
 
-    std::cout << "Standard deviation of normals: \n" << std_dev << std::endl;
+//     std::cout << "Standard deviation of normals: \n" << std_dev << std::endl;
 
-    // Save results to a CSV file
-    // std::string file_path = folder_path + "/pca_results.csv";
+//     // Save results to a CSV file
+//     // std::string file_path = folder_path + "/pca_results.csv";
 
-    std::ofstream file(file_path, std::ios_base::app); // Append mode. File name being saved globally
+//     std::ofstream file(file_path, std::ios_base::app); // Append mode. File name being saved globally
 
-    if (file.is_open()) {
-        if (write_header) {
-            file << "Eigenvalue1,Eigenvalue2,Eigenvalue3,Eigenvector1_x,Eigenvector1_y,Eigenvector1_z,"
-                 << "Eigenvector2_x,Eigenvector2_y,Eigenvector2_z,Eigenvector3_x,Eigenvector3_y,Eigenvector3_z,"
-                 << "StdDev_NormalX,StdDev_NormalY,StdDev_NormalZ\n";
-        }
-        file << eigenvalues(0) << "," << eigenvalues(1) << "," << eigenvalues(2) << ","
-             << eigenvectors(0, 0) << "," << eigenvectors(1, 0) << "," << eigenvectors(2, 0) << ","
-             << eigenvectors(0, 1) << "," << eigenvectors(1, 1) << "," << eigenvectors(2, 1) << ","
-             << eigenvectors(0, 2) << "," << eigenvectors(1, 2) << "," << eigenvectors(2, 2) << ","
-             << std_dev(0) << "," << std_dev(1) << "," << std_dev(2) << "\n";
-        file.close();
-        std::cout << "PCA results saved to " << file_path << std::endl;
-    } else {
-        std::cerr << "Unable to open file to save PCA results." << std::endl;
-    }
-}
+//     if (file.is_open()) {
+//         if (write_header) {
+//             file << "Eigenvalue1,Eigenvalue2,Eigenvalue3,Eigenvector1_x,Eigenvector1_y,Eigenvector1_z,"
+//                  << "Eigenvector2_x,Eigenvector2_y,Eigenvector2_z,Eigenvector3_x,Eigenvector3_y,Eigenvector3_z,"
+//                  << "StdDev_NormalX,StdDev_NormalY,StdDev_NormalZ\n";
+//         }
+//         file << eigenvalues(0) << "," << eigenvalues(1) << "," << eigenvalues(2) << ","
+//              << eigenvectors(0, 0) << "," << eigenvectors(1, 0) << "," << eigenvectors(2, 0) << ","
+//              << eigenvectors(0, 1) << "," << eigenvectors(1, 1) << "," << eigenvectors(2, 1) << ","
+//              << eigenvectors(0, 2) << "," << eigenvectors(1, 2) << "," << eigenvectors(2, 2) << ","
+//              << std_dev(0) << "," << std_dev(1) << "," << std_dev(2) << "\n";
+//         file.close();
+//         std::cout << "PCA results saved to " << file_path << std::endl;
+//     } else {
+//         std::cerr << "Unable to open file to save PCA results." << std::endl;
+//     }
+// }
 
 
 // Calculate and save normals to a CSV file
@@ -363,38 +385,38 @@ void calculateAndSaveNormals(const pcl::PointCloud<pcl::Normal>::Ptr& normals, c
 // SURFACE ANALYSIS
 // ----------------------------------------------------------------------------------
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr calculateSurfaceRoughness(
-    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, int k_neighbors) {
-    pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
-    kdtree.setInputCloud(cloud);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr roughness_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+// pcl::PointCloud<pcl::PointXYZ>::Ptr calculateSurfaceRoughness(
+//     const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, int k_neighbors) {
+//     pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+//     kdtree.setInputCloud(cloud);
+//     pcl::PointCloud<pcl::PointXYZ>::Ptr roughness_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 
-    for (size_t i = 0; i < cloud->points.size(); ++i) {
-        std::vector<int> point_indices;
-        std::vector<float> point_squared_distances;
-        kdtree.nearestKSearch(cloud->points[i], k_neighbors, point_indices, point_squared_distances);
+//     for (size_t i = 0; i < cloud->points.size(); ++i) {
+//         std::vector<int> point_indices;
+//         std::vector<float> point_squared_distances;
+//         kdtree.nearestKSearch(cloud->points[i], k_neighbors, point_indices, point_squared_distances);
 
-        float mean_z = 0.0;
-        for (size_t j = 0; j < point_indices.size(); ++j) {
-            mean_z += cloud->points[point_indices[j]].z;
-        }
-        mean_z /= point_indices.size();
+//         float mean_z = 0.0;
+//         for (size_t j = 0; j < point_indices.size(); ++j) {
+//             mean_z += cloud->points[point_indices[j]].z;
+//         }
+//         mean_z /= point_indices.size();
 
-        float roughness = 0.0;
-        for (size_t j = 0; j < point_indices.size(); ++j) {
-            roughness += pow(cloud->points[point_indices[j]].z - mean_z, 2);
-        }
-        roughness = sqrt(roughness / point_indices.size());
+//         float roughness = 0.0;
+//         for (size_t j = 0; j < point_indices.size(); ++j) {
+//             roughness += pow(cloud->points[point_indices[j]].z - mean_z, 2);
+//         }
+//         roughness = sqrt(roughness / point_indices.size());
 
-        pcl::PointXYZ point;
-        point.x = cloud->points[i].x;
-        point.y = cloud->points[i].y;
-        point.z = roughness; // Store roughness in the z-coordinate for simplicity
-        roughness_cloud->points.push_back(point);
-    }
+//         pcl::PointXYZ point;
+//         point.x = cloud->points[i].x;
+//         point.y = cloud->points[i].y;
+//         point.z = roughness; // Store roughness in the z-coordinate for simplicity
+//         roughness_cloud->points.push_back(point);
+//     }
 
-    return roughness_cloud;
-}
+//     return roughness_cloud;
+// }
 
 
 // ----------------------------------------------------------------------------------
@@ -425,31 +447,36 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // publishProcessedCloud(cloud_after_passthrough_y, pub_after_passthrough_y, input_msg);
     // ROS_INFO("After Passthough filter Y: %ld points", cloud_after_passthrough_y->points.size());
 
-    // -------------Downsampling-------------
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_downsampling = voxelGridDownsampling(
-        cloud_after_passthrough_x, 0.05f, 0.05f, 0.01f);
-    publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
+    // -------------Low-Pass Filtering-------------
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_low_pass = lowPassFilterMLS(cloud_after_passthrough_x);
+    publishProcessedCloud(cloud_after_low_pass, pub_after_low_pass, input_msg);
+    ROS_INFO("After Low-Pass filter: %ld points", cloud_after_low_pass->points.size());
 
-    // Log the number of points in the downsampled cloud directly
-    ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
+    // -------------Downsampling-------------
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_downsampling = voxelGridDownsampling(
+    //     cloud_after_passthrough_x, 0.05f, 0.05f, 0.01f);
+    // publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
+
+    // // Log the number of points in the downsampled cloud directly
+    // ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
    
     // -------------Normal Estimation and Visualization-------------
-    // pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_passthrough_x, 100);
-    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_downsampling, 50);
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_passthrough_x, 500);
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals_1 = computeNormals(cloud_after_low_pass, 500);
 
     // ROS_INFO("No. of Normals Extracted: %ld points", cloud_normals->points.size());
     
-    // visualizeNormals(cloud_after_passthrough_x, cloud_normals);
-    // visualizeNormals(cloud_after_downsampling, cloud_normals);
+    visualizeNormals(cloud_after_passthrough_x, cloud_normals);
+    visualizeNormals(cloud_after_low_pass, cloud_normals_1);
 
     // -------------Terrain Analysis-------------
 
     // PCA and Save Results
     // calculateAndSavePCAResults(cloud_after_downsampling, cloud_normals, FOLDER_PATH, write_header);
 
-    // Saving the normals directly in the csv file. PCA will be done on the python end.
-    calculateAndSaveNormals(cloud_normals, file_path);
-    write_header = false; // Ensure header is only written once
+    // // Saving the normals directly in the csv file. PCA will be done on the python end.
+    // calculateAndSaveNormals(cloud_normals, file_path);
+    // write_header = false; // Ensure header is only written once
 
 
     // Calculate roughness
@@ -496,20 +523,19 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    // Remove existing CSV file if it exists
-    std::string file_path = FOLDER_PATH + "/pca_results.csv";
     if (std::remove(file_path.c_str()) == 0) {
         ROS_INFO("Removed existing file: %s", file_path.c_str());
     }
 
-    // bool write_header = true;
 
     // Publishers
     pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_x", 1);
     // pub_after_passthrough_y = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_y", 1);
     pub_after_passthrough_z = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_z", 1);
     
-    pub_after_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/downsampled_cloud", 1);
+    pub_after_low_pass = nh.advertise<sensor_msgs::PointCloud2>("/lowpass_cloud", 1);
+
+    // pub_after_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/downsampled_cloud", 1);
     // pub_after_sor = nh.advertise<sensor_msgs::PointCloud2>("/sor_filtered_cloud", 1);
     
     // Subscribing to Lidar Sensor topic
