@@ -185,7 +185,8 @@ def report_metrics(y_test, y_pred):
     print("Accuracy Score:", accuracy_score(y_test, y_pred))
 
 if __name__ == "__main__":
-    folder_path = "/home/shovon/Desktop/robosense_data/terrain/grass_concrete_collection/terrain_analysis"
+    # folder_path = "/home/shovon/Desktop/robosense_data/terrain/grass_concrete_collection/terrain_analysis"
+    folder_path = "/home/nrelab-titan/Desktop/shovon/data/terrain_analysis_1" # Titan pc directory
     filenames = {
         'grass.csv': 'Grass',
         'plain_normals.csv': 'Plain'

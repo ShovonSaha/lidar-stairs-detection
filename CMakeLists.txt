@@ -26,19 +26,19 @@ add_definitions(${PCL_DEFINITIONS})
 # include_directories(${MLPACK_INCLUDE_DIRS})
 # include_directories(/usr/include/mlpack/methods/dbscan/dbscan.hpp)  # Adjust this path based on the output of locate. command: locate dbscan.hpp
 
-# Since find_package(MLPACK) failed to find MLPack automatically, specify manually
-include_directories(/usr/include)  # MLPack headers are here, as verified
+# # Since find_package(MLPACK) failed to find MLPack automatically, specify manually
+# include_directories(/usr/include)  # MLPack headers are here, as verified
 
-# Find Armadillo
-find_package(Armadillo REQUIRED)
-include_directories(${ARMADILLO_INCLUDE_DIRS})
+# # Find Armadillo
+# find_package(Armadillo REQUIRED)
+# include_directories(${ARMADILLO_INCLUDE_DIRS})
 
-find_package(OpenMP REQUIRED)
-if(OPENMP_FOUND)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-endif()
+# find_package(OpenMP REQUIRED)
+# if(OPENMP_FOUND)
+#     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+#     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+#     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+# endif()
 
 
 # Find Python3
@@ -264,7 +264,7 @@ add_executable(terrain src/terrain.cpp) # Saves values in csv files for in-depth
 target_link_libraries(plane_prob 
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
-  ${MLPACK_LIBRARIES}
+  # ${MLPACK_LIBRARIES}
 )
 
 # Linking libraries
@@ -292,9 +292,9 @@ target_link_libraries(plane_prob
 target_link_libraries(terrain 
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
-  mlpack
-  armadillo
-  OpenMP::OpenMP_CXX
+  # mlpack
+  # armadillo
+  # OpenMP::OpenMP_CXX
 )
 
 # target_link_libraries(pcl_viewer 
