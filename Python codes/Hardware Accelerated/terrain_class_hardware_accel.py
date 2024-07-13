@@ -100,7 +100,7 @@ def train_and_test_classifier(classifier, data, labels):
     return classifier, scaler
 
 if __name__ == "__main__":
-    folder_path = "/home/nrelab-titan/Desktop/shovon/data/terrain_analysis_1" # Titan pc directory
+    folder_path = "/home/nrelab-titan/Desktop/shovon/data/terrain_analysis" # Titan pc directory
     filenames = {
         'grass.csv': 'Grass',
         'plain_normals.csv': 'Plain'
@@ -122,17 +122,17 @@ if __name__ == "__main__":
     label_encoder = LabelEncoder()
     encoded_labels = label_encoder.fit_transform(labels)
 
-    # Train and plot Gradient Boosting Classifier (using XGBoost)
-    gbc = XGBClassifier(n_estimators=100, learning_rate=1.0, max_depth=3, random_state=42)
-    gbc, scaler = train_and_test_classifier(gbc, data, encoded_labels)
-    plot_classification_results_3d(gbc, scaler.transform(data), encoded_labels, colors, labels_names, os.path.join(folder_path, 'gbc_classification_results_3d_plot.png'))
+    # # Train and plot Gradient Boosting Classifier (using XGBoost)
+    # gbc = XGBClassifier(n_estimators=100, learning_rate=1.0, max_depth=3, random_state=42)
+    # gbc, scaler = train_and_test_classifier(gbc, data, encoded_labels)
+    # plot_classification_results_3d(gbc, scaler.transform(data), encoded_labels, colors, labels_names, os.path.join(folder_path, 'gbc_classification_results_3d_plot.png'))
 
     # Train and plot Support Vector Machine
     svm = SVC(kernel='rbf', gamma='scale', C=1.0)
     svm, scaler = train_and_test_classifier(svm, data, encoded_labels)
-    plot_classification_results_3d(svm, scaler.transform(data), encoded_labels, colors, labels_names, os.path.join(folder_path, 'svm_classification_results_3d_plot.png'))
+    # plot_classification_results_3d(svm, scaler.transform(data), encoded_labels, colors, labels_names, os.path.join(folder_path, 'svm_classification_results_3d_plot.png'))
 
     # For 2D plots, reduce dimensions to first two normals
     data_2d = data[:, :2]
-    plot_classification_results_2d(gbc, scaler.transform(data_2d), encoded_labels, colors, labels_names, os.path.join(folder_path, 'gbc_classification_results_2d_plot.png'), axis_labels=('NormalX', 'NormalY'))
+    # plot_classification_results_2d(gbc, scaler.transform(data_2d), encoded_labels, colors, labels_names, os.path.join(folder_path, 'gbc_classification_results_2d_plot.png'), axis_labels=('NormalX', 'NormalY'))
     plot_classification_results_2d(svm, scaler.transform(data_2d), encoded_labels, colors, labels_names, os.path.join(folder_path, 'svm_classification_results_2d_plot.png'), axis_labels=('NormalX', 'NormalY'))
