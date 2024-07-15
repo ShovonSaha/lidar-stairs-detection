@@ -59,9 +59,9 @@
 
 // ROS Publishers
 ros::Publisher pub_after_passthrough_x;
-// ros::Publisher pub_after_passthrough_y;
+ros::Publisher pub_after_passthrough_y;
 ros::Publisher pub_after_passthrough_z;
-// ros::Publisher pub_after_downsampling;
+ros::Publisher pub_after_downsampling;
 ros::Publisher pub_after_low_pass;
 
 ros::Publisher marker_pub;
@@ -120,7 +120,7 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterX(const pcl::PointCloud<pcl
   pass.setInputCloud(cloud);
   pass.setFilterFieldName("x");
 //   pass.setFilterLimits(1, 1.5);
-  pass.setFilterLimits(0, 2.5); // For capturing a longer length of data
+  pass.setFilterLimits(0, 3.5); // For capturing a longer length of data
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZ>);
   pass.filter(*cloud_filtered_x);
@@ -128,19 +128,19 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterX(const pcl::PointCloud<pcl
   return cloud_filtered_x;
 }
 
+// Third stage filter
+pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterY(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+{
+    pcl::PassThrough<pcl::PointXYZ> pass;
+    pass.setInputCloud(cloud);
+    pass.setFilterFieldName("y");
+    pass.setFilterLimits(-0.3, 0.3);
 
-// pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterY(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
-// {
-//     pcl::PassThrough<pcl::PointXYZ> pass;
-//     pass.setInputCloud(cloud);
-//     pass.setFilterFieldName("y");
-//     pass.setFilterLimits(-0.3, 0.3);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZ>);
+    pass.filter(*cloud_filtered_y);
 
-//     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZ>);
-//     pass.filter(*cloud_filtered_y);
-
-//     return cloud_filtered_y;
-// }
+    return cloud_filtered_y;
+}
 
 
 
@@ -154,7 +154,7 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr lowPassFilterMLS(const pcl::PointCloud<pcl::
     mls.setComputeNormals(false);
     mls.setPolynomialOrder(1);  // Set the polynomial order for the MLS algorithm
     mls.setSearchMethod(pcl::search::KdTree<pcl::PointXYZ>::Ptr(new pcl::search::KdTree<pcl::PointXYZ>));
-    mls.setSearchRadius(0.03);  // Set the search radius for the MLS algorithm
+    mls.setSearchRadius(0.1);  // Set the search radius for the MLS algorithm
 
     mls.process(*cloud_smoothed);
 
@@ -443,31 +443,27 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     ROS_INFO("After Passthough filter X: %ld points", cloud_after_passthrough_x->points.size());
 
     // -------------Passthrough Filtering with Y-Axis : Left-Right axis-------------
-    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_y = passthroughFilterY(cloud_after_passthrough_x);
-    // publishProcessedCloud(cloud_after_passthrough_y, pub_after_passthrough_y, input_msg);
-    // ROS_INFO("After Passthough filter Y: %ld points", cloud_after_passthrough_y->points.size());
-
-    // -------------Low-Pass Filtering-------------
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_low_pass = lowPassFilterMLS(cloud_after_passthrough_x);
-    publishProcessedCloud(cloud_after_low_pass, pub_after_low_pass, input_msg);
-    ROS_INFO("After Low-Pass filter: %ld points", cloud_after_low_pass->points.size());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_y = passthroughFilterY(cloud_after_passthrough_x);
+    publishProcessedCloud(cloud_after_passthrough_y, pub_after_passthrough_y, input_msg);
+    ROS_INFO("After Passthough filter Y: %ld points", cloud_after_passthrough_y->points.size());
 
     // -------------Downsampling-------------
-    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_downsampling = voxelGridDownsampling(
-    //     cloud_after_passthrough_x, 0.05f, 0.05f, 0.01f);
-    // publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_downsampling = voxelGridDownsampling(
+        cloud_after_passthrough_y, 0.08f, 0.08f, 0.005f);
+    publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
+    ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
 
-    // // Log the number of points in the downsampled cloud directly
-    // ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
+    // -------------Low-Pass Filtering-------------
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_low_pass = lowPassFilterMLS(cloud_after_downsampling);
+    // publishProcessedCloud(cloud_after_low_pass, pub_after_low_pass, input_msg);
+    // ROS_INFO("After Low-Pass filter: %ld points", cloud_after_low_pass->points.size());
    
     // -------------Normal Estimation and Visualization-------------
-    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_passthrough_x, 500);
-    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals_1 = computeNormals(cloud_after_low_pass, 500);
-
-    // ROS_INFO("No. of Normals Extracted: %ld points", cloud_normals->points.size());
-    
-    visualizeNormals(cloud_after_passthrough_x, cloud_normals);
-    visualizeNormals(cloud_after_low_pass, cloud_normals_1);
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_downsampling, 500);
+    // pcl::PointCloud<pcl::Normal>::Ptr cloud_normals_1 = computeNormals(cloud_after_low_pass, 500);
+   
+    // visualizeNormals(cloud_after_downsampling, cloud_normals);
+    // visualizeNormals(cloud_after_low_pass, cloud_normals_1);
 
     // -------------Terrain Analysis-------------
 
@@ -530,17 +526,17 @@ int main(int argc, char** argv) {
 
     // Publishers
     pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_x", 1);
-    // pub_after_passthrough_y = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_y", 1);
+    pub_after_passthrough_y = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_y", 1);
     pub_after_passthrough_z = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_cloud_z", 1);
     
     pub_after_low_pass = nh.advertise<sensor_msgs::PointCloud2>("/lowpass_cloud", 1);
 
-    // pub_after_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/downsampled_cloud", 1);
+    pub_after_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/downsampled_cloud", 1);
     // pub_after_sor = nh.advertise<sensor_msgs::PointCloud2>("/sor_filtered_cloud", 1);
     
     // Subscribing to Lidar Sensor topic
     // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh)));
-    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh)));
+    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
     
     
     ros::spin();

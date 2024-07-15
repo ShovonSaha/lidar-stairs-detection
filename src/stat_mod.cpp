@@ -336,7 +336,7 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterY(const pcl::PointCloud<pcl
   pcl::PassThrough<pcl::PointXYZ> pass;
   pass.setInputCloud(cloud);
   pass.setFilterFieldName("y");
-  pass.setFilterLimits(-0.7, 0.7);
+  pass.setFilterLimits(-0.2, 0.5);
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZ>);
   pass.filter(*cloud_filtered_y);
