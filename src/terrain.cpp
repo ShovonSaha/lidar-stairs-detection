@@ -153,6 +153,10 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr lowPassFilterMLS(const pcl::PointCloud<pcl::
     mls.setInputCloud(cloud);
     mls.setComputeNormals(false);
     mls.setPolynomialOrder(1);  // Set the polynomial order for the MLS algorithm
+                                // Order: 0 for averaging.
+                                // Order: 1 for fitting a plane.
+                                // Order: 2 for fitting a curve (quadratic).
+                                // Order: >2 for fitting a more complicated curve. (will require more computation)
     mls.setSearchMethod(pcl::search::KdTree<pcl::PointXYZ>::Ptr(new pcl::search::KdTree<pcl::PointXYZ>));
     mls.setSearchRadius(0.1);  // Set the search radius for the MLS algorithm
 

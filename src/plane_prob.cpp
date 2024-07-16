@@ -59,6 +59,8 @@ ros::Publisher pub_after_passthrough_y;
 // ros::Publisher pub_after_passthrough_z;
 ros::Publisher pub_after_axis_downsampling;
 // ros::Publisher pub_after_sor;
+ros::Publisher pub_after_low_pass;
+
 ros::Publisher marker_pub;
 
 // Global vector to hold publishers for each cluster
@@ -146,13 +148,14 @@ void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, con
 //     }
 // }
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterY(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+pcl::PointCloud<pcl::PointXYZ>::Ptr passthroughFilterY(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+                                                        double min_limit, double max_limit)
 {
     pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("y");
     // pass.setFilterLimits(-0.7, 0.7); // Cyglidar D1 sensor filter config
-    pass.setFilterLimits(-0.5, 0.5); // RoboSense sensor filter config
+    pass.setFilterLimits(min_limit, max_limit); // RoboSense sensor filter config
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZ>);
     pass.filter(*cloud_filtered_y);
@@ -188,6 +191,30 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr downsamplingAlongAxis(
 
     return cloud_downsampled;
 }
+
+
+// Low-Pass Filter using Moving Least Squares (MLS)
+pcl::PointCloud<pcl::PointXYZ>::Ptr lowPassFilterMLS(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, 
+                                                    int order, double search_radius)
+{
+    pcl::MovingLeastSquares<pcl::PointXYZ, pcl::PointXYZ> mls;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_smoothed(new pcl::PointCloud<pcl::PointXYZ>);
+
+    mls.setInputCloud(cloud);
+    mls.setComputeNormals(false);
+    mls.setPolynomialOrder(order);  // Set the polynomial order for the MLS algorithm
+                                // Order: 0 for averaging.
+                                // Order: 1 for fitting a plane.
+                                // Order: 2 for fitting a curve (quadratic).
+                                // Order: >2 for fitting a more complicated curve. (will require more computation)
+    mls.setSearchMethod(pcl::search::KdTree<pcl::PointXYZ>::Ptr(new pcl::search::KdTree<pcl::PointXYZ>));
+    mls.setSearchRadius(search_radius);  // Set the search radius for the MLS algorithm
+
+    mls.process(*cloud_smoothed);
+
+    return cloud_smoothed;
+}
+
 
 
 // ----------------------------------------------------------------------------------
@@ -624,6 +651,41 @@ void publishPlaneMarkers(const std::vector<PlaneData>& plane_storage, const std:
 // NORMAL EXTRACTION
 // ----------------------------------------------------------------------------------
 
+
+// ----------------------------------------------------------------------------------
+// NORMAL EXTRACTION
+// ----------------------------------------------------------------------------------
+
+pcl::PointCloud<pcl::Normal>::Ptr computeNormals(
+                                    const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud,
+                                    int k_numbers)
+{
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
+    ne.setInputCloud(cloud);
+
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+    ne.setSearchMethod(tree);
+
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+    ne.setKSearch(k_numbers);  // Adjust the value based on your data
+    ne.compute(*normals);
+
+    return normals;
+}
+
+void visualizeNormals(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PointCloud<pcl::Normal>::Ptr& normals) {
+    pcl::visualization::PCLVisualizer viewer("Normals Visualization");
+    viewer.setBackgroundColor(0.05, 0.05, 0.05, 0); // Dark background for better visibility
+    viewer.addPointCloud<pcl::PointXYZ>(cloud, "cloud");
+
+    // Add normals to the viewer with a specific scale factor for better visibility
+    viewer.addPointCloudNormals<pcl::PointXYZ, pcl::Normal>(cloud, normals, 10, 0.05, "normals");
+
+    while (!viewer.wasStopped()) {
+        viewer.spinOnce();
+    }
+}
+
 // int determineKSearch(int numberOfPoints) {
 //     // Set a minimum k value
 //     const int minK = 2;
@@ -888,42 +950,70 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     pcl::fromROSMsg(*input_msg, *cloud);
 
     // Passthrough Filtering with Y-Axis
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_y = passthroughFilterY(cloud);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_passthrough_y = passthroughFilterY(cloud, -0.2, 0.2);
     publishProcessedCloud(cloud_after_passthrough_y, pub_after_passthrough_y, input_msg);
     ROS_INFO("After Passthough filter: %ld points", cloud_after_passthrough_y->points.size());
 
     // Downsampling along X-axis
     // Parameters: cloud, axis, min_limit, max_limit, leaf_size_x, leaf_size_y, leaf_size_z
+    double min_limit = -0.5;
+    double max_limit = 0;
+
+    double voxel_x = 0.1;
+    double voxel_y = 0.1;
+    double voxel_z = 0.08;
     
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_axis_downsampling = downsamplingAlongAxis(
                                                                         cloud_after_passthrough_y, // cloud to be downsampled
-                                                                        "z",                       // axis to downsample with
-                                                                        -0.5, 0.5,                  // filter limits on the selected axis
-                                                                        0.05f, 0.05f, 0.05f);      // leaf dimensions across x, y and z axis
+                                                                        "z",                       //axis to downsample with
+                                                                        min_limit, max_limit,                  // filter limits on the selected axis
+                                                                        voxel_x, voxel_y, voxel_z);      // leaf dimensions across x, y and z axis
     publishProcessedCloud(cloud_after_axis_downsampling, pub_after_axis_downsampling, input_msg);
 
     // // Log the number of points in the downsampled cloud directly
     ROS_INFO("After Downsampling: %ld points", cloud_after_axis_downsampling->points.size());
 
-    ROS_INFO(" "); // Creating a line gap for better readability
+    // -------------Low-Pass Filtering-------------
+    double min_voxel = std::min({voxel_x, voxel_y, voxel_z});
+
+    // Add 0.2 to the minimum value
+    double dif_threshold = 0.2;
+    // double search_radius = min_voxel + dif_threshold;
+    double search_radius = 0.05;
+
+    int poly_order = 1;
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_low_pass = lowPassFilterMLS(cloud_after_axis_downsampling, poly_order, search_radius);
+    publishProcessedCloud(cloud_after_low_pass, pub_after_low_pass, input_msg);
+    ROS_INFO("After Low-Pass filter: %ld points", cloud_after_low_pass->points.size());
   
+
+    // -------------NORMAL ESTIMATION & VISUALIZATION-------------
+    int k_numbers = (cloud_after_low_pass->points.size())/10;
+
+    // pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_axis_downsampling, 50);
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals_1 = computeNormals(cloud_after_low_pass, k_numbers);
+   
+    // visualizeNormals(cloud_after_axis_downsampling, cloud_normals);
+    // visualizeNormals(cloud_after_low_pass, cloud_normals_1);
+    
     // --------------------------PLANE SEGMENTATION: -------------------------------------------
 
     // Plane segmentation from directly the downsampled cloud
 
-    std::vector<PlaneData> plane_storage;
+    // std::vector<PlaneData> plane_storage;
     
-    // Extract all possible planes from the downsampled point cloud
-    int max_iterations = 1000;  // Example: max iterations for RANSAC
-    double distance_threshold = 0.005;  // Example: distance threshold for RANSAC
+    // // Extract all possible planes from the downsampled point cloud
+    // int max_iterations = 100;  // Example: max iterations for RANSAC
+    // double distance_threshold = 0.01;  // Example: distance threshold for RANSAC
 
-    extractPlanes(cloud_after_axis_downsampling, plane_storage, max_iterations, distance_threshold);
+    // extractPlanes(cloud_after_low_pass, plane_storage, max_iterations, distance_threshold);
 
-    // Publish the plane markers
-    publishPlaneMarkers(plane_storage, global_plane_normals, marker_pub, cloud_after_axis_downsampling->header.frame_id);
+    // // Publish the plane markers
+    // publishPlaneMarkers(plane_storage, global_plane_normals, marker_pub, cloud_after_low_pass->header.frame_id);
 
-    ROS_INFO("--------------------------------------"); // Creating a line 
-    ros::Duration(1.0).sleep();
+    // ROS_INFO("--------------------------------------"); // Creating a line 
+    // ros::Duration(1.0).sleep();
     
 
     // // Plane extraction with downsampled clusters::
@@ -1018,6 +1108,8 @@ int main(int argc, char** argv) {
 
     pub_after_axis_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/axis_downsampled_cloud", 1);
     // pub_after_sor = nh.advertise<sensor_msgs::PointCloud2>("/sor_filtered_cloud", 1);
+
+    pub_after_low_pass = nh.advertise<sensor_msgs::PointCloud2>("/lowpass_cloud", 1);
     
     // marker_pub = nh.advertise<visualization_msgs::Marker>("visualization_marker", 10);
     marker_pub = nh.advertise<visualization_msgs::MarkerArray>("visualization_marker_array", 10);
