@@ -738,67 +738,67 @@ void visualizeNormals(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pc
 
 
 
-// void visualizeClustersWithNormals() {
-//     pcl::visualization::PCLVisualizer viewer("Cluster Normals Visualization");
-//     viewer.setBackgroundColor(0.0, 0.0, 0.0);
+void visualizeClustersWithNormals() {
+    pcl::visualization::PCLVisualizer viewer("Cluster Normals Visualization");
+    viewer.setBackgroundColor(0.0, 0.0, 0.0);
 
-//     // Display original clusters with normals
-//     for (size_t i = 0; i < global_original_clusters.size(); ++i) {
-//         std::string cloud_id = "original_cluster_" + std::to_string(i);
-//         RGBColor color = colors[i % colors.size()]; // Cycle through colors
+    // Display original clusters with normals
+    for (size_t i = 0; i < global_original_clusters.size(); ++i) {
+        std::string cloud_id = "original_cluster_" + std::to_string(i);
+        RGBColor color = colors[i % colors.size()]; // Cycle through colors
 
-//         // Create color handlers
-//         pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> color_handler(global_original_clusters[i], std::get<0>(color) * 255, std::get<1>(color) * 255, std::get<2>(color) * 255);
-//         viewer.addPointCloud<pcl::PointXYZ>(global_original_clusters[i], color_handler, cloud_id);
-//         viewer.addPointCloudNormals<pcl::PointXYZ, pcl::Normal>(global_original_clusters[i], global_original_normals[i], 10, 0.05, cloud_id + "_normals");
-//     }
+        // Create color handlers
+        pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> color_handler(global_original_clusters[i], std::get<0>(color) * 255, std::get<1>(color) * 255, std::get<2>(color) * 255);
+        viewer.addPointCloud<pcl::PointXYZ>(global_original_clusters[i], color_handler, cloud_id);
+        viewer.addPointCloudNormals<pcl::PointXYZ, pcl::Normal>(global_original_clusters[i], global_original_normals[i], 10, 0.05, cloud_id + "_normals");
+    }
 
-//     // // Similar for downsampled clusters
-//     // for (size_t i = 0; i < global_downsampled_clusters.size(); ++i) {
-//     //     std::string cloud_id = "downsampled_cluster_" + std::to_string(i);
-//     //     RGBColor color = colors[i % colors.size()]; // Cycle through colors
+    // // Similar for downsampled clusters
+    // for (size_t i = 0; i < global_downsampled_clusters.size(); ++i) {
+    //     std::string cloud_id = "downsampled_cluster_" + std::to_string(i);
+    //     RGBColor color = colors[i % colors.size()]; // Cycle through colors
 
-//     //     pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> color_handler(global_downsampled_clusters[i], std::get<0>(color) * 255, std::get<1>(color) * 255, std::get<2>(color) * 255);
-//     //     viewer.addPointCloud<pcl::PointXYZ>(global_downsampled_clusters[i], color_handler, cloud_id);
-//     //     viewer.addPointCloudNormals<pcl::PointXYZ, pcl::Normal>(global_downsampled_clusters[i], global_downsampled_normals[i], 10, 0.05, cloud_id + "_normals");
-//     // }
+    //     pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZ> color_handler(global_downsampled_clusters[i], std::get<0>(color) * 255, std::get<1>(color) * 255, std::get<2>(color) * 255);
+    //     viewer.addPointCloud<pcl::PointXYZ>(global_downsampled_clusters[i], color_handler, cloud_id);
+    //     viewer.addPointCloudNormals<pcl::PointXYZ, pcl::Normal>(global_downsampled_clusters[i], global_downsampled_normals[i], 10, 0.05, cloud_id + "_normals");
+    // }
 
-//     while (!viewer.wasStopped()) {
-//         viewer.spinOnce();
-//     }
-// }
+    while (!viewer.wasStopped()) {
+        viewer.spinOnce();
+    }
+}
 
 
 
-// void clusterWithNormals(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
-//     // Estimate normals
-//     pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
-//     pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal>);
-//     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
-//     ne.setInputCloud(cloud);
-//     ne.setSearchMethod(tree);
-//     ne.setKSearch(50);
-//     ne.compute(*normals);
+void clusterWithNormals(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud) {
+    // Estimate normals
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
+    pcl::PointCloud<pcl::Normal>::Ptr normals (new pcl::PointCloud<pcl::Normal>);
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
+    ne.setInputCloud(cloud);
+    ne.setSearchMethod(tree);
+    ne.setKSearch(50);
+    ne.compute(*normals);
 
-//     // Conditional Euclidean clustering
-//     pcl::ConditionalEuclideanClustering<pcl::PointXYZ> cec (true);
-//     cec.setInputCloud(cloud);
-//     cec.setConditionFunction([&](const pcl::PointXYZ& point_a, const pcl::PointXYZ& point_b, float squared_distance) {
-//         int idx_a = &point_a - &cloud->points[0];
-//         int idx_b = &point_b - &cloud->points[0];
-//         const pcl::Normal& normal_a = normals->points[idx_a];
-//         const pcl::Normal& normal_b = normals->points[idx_b];
-//         float dot_product = normal_a.normal_x * normal_b.normal_x + normal_a.normal_y * normal_b.normal_y + normal_a.normal_z * normal_b.normal_z;
-//         return dot_product >= cosf(pcl::deg2rad(10.0)); // 10 degrees tolerance
-//     });
-//     cec.setClusterTolerance(0.05);
-//     cec.setMinClusterSize(50);
-//     cec.setMaxClusterSize(25000);
-//     std::vector<pcl::PointIndices> clusters;
-//     cec.segment(clusters);
+    // Conditional Euclidean clustering
+    pcl::ConditionalEuclideanClustering<pcl::PointXYZ> cec (true);
+    cec.setInputCloud(cloud);
+    cec.setConditionFunction([&](const pcl::PointXYZ& point_a, const pcl::PointXYZ& point_b, float squared_distance) {
+        int idx_a = &point_a - &cloud->points[0];
+        int idx_b = &point_b - &cloud->points[0];
+        const pcl::Normal& normal_a = normals->points[idx_a];
+        const pcl::Normal& normal_b = normals->points[idx_b];
+        float dot_product = normal_a.normal_x * normal_b.normal_x + normal_a.normal_y * normal_b.normal_y + normal_a.normal_z * normal_b.normal_z;
+        return dot_product >= cosf(pcl::deg2rad(10.0)); // 10 degrees tolerance
+    });
+    cec.setClusterTolerance(0.05);
+    cec.setMinClusterSize(50);
+    cec.setMaxClusterSize(25000);
+    std::vector<pcl::PointIndices> clusters;
+    cec.segment(clusters);
 
-//     // Clusters can now be processed
-// }
+    // Clusters can now be processed
+}
 
 
 
