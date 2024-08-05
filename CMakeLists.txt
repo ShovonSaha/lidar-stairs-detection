@@ -210,7 +210,7 @@ add_definitions(${PCL_DEFINITIONS})
 
 # add_executable(stair_det src/stair_det.cpp)
 
-add_executable(plane_prob src/plane_prob.cpp)   # Main Plane extraction algorithm for stair detection
+# add_executable(plane_prob src/plane_prob.cpp)   # Main Plane extraction algorithm for stair detection
 
 # add_executable(plane_prob_1 src/plane_prob_1.cpp)
 
@@ -261,11 +261,11 @@ add_executable(terrain src/terrain.cpp) # Saves values in csv files for in-depth
 
 
 
-target_link_libraries(plane_prob 
-  ${catkin_LIBRARIES}
-  ${PCL_LIBRARIES}
-  # ${MLPACK_LIBRARIES}
-)
+# target_link_libraries(plane_prob 
+#   ${catkin_LIBRARIES}
+#   ${PCL_LIBRARIES}
+#   # ${MLPACK_LIBRARIES}
+# )
 
 # Linking libraries
 # target_link_libraries(plane_prob 
