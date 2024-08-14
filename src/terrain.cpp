@@ -66,7 +66,7 @@ ros::Publisher pub_after_passthrough_z;
 ros::Publisher pub_after_downsampling;
 // ros::Publisher pub_after_outlier_removal;
 // ros::Publisher pub_after_lowpass;
-
+ros::Publisher pub_after_downsampling_before_noise;
 ros::Publisher pub_after_adding_noise;
 
 // ros::Publisher marker_pub;
@@ -98,11 +98,11 @@ const std::string FOLDER_PATH = "/home/nrelab-titan/Desktop/shovon/data/terrain_
 
 // Noise: 20 mm
 // std::string file_path = FOLDER_PATH + "/plain_terrain_features_20_mm.csv";
-std::string file_path = FOLDER_PATH + "/grass_terrain_features_20_mm.csv";
+// std::string file_path = FOLDER_PATH + "/grass_terrain_features_20_mm.csv";
 
 bool write_header = true;
 
-float noise_stddev = 0.02;  // 10 mm = 0.01 in meters
+float noise_stddev = 0.01;  // 10 mm = 0.01 in meters
 
 
 
@@ -318,8 +318,13 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     pcl::fromROSMsg(*input_msg, *cloud);
     ROS_INFO("Raw PointCloud: %ld points", cloud->points.size());
 
+    // Downsampling to increase the line separation in lidar
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling_before_noise = voxelGridDownsampling(cloud, 0.02f, 0.02f, 0.02f);
+    publishProcessedCloud(cloud_after_downsampling_before_noise, pub_after_downsampling_before_noise, input_msg);
+    ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling_before_noise->points.size());
+
     // Add Gaussian noise to the cloud
-    pcl::PointCloud<pcl::PointXYZI>::Ptr noisy_cloud = addGaussianNoise(cloud, noise_stddev);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr noisy_cloud = addGaussianNoise(cloud_after_downsampling_before_noise, noise_stddev);
     publishProcessedCloud(noisy_cloud, pub_after_adding_noise, input_msg);
     ROS_INFO("Noisy PointCloud: %ld points with %.3f noise stddev", noisy_cloud->points.size(), noise_stddev);
 
@@ -366,7 +371,7 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // visualizeNormals(cloud_after_downsampling, cloud_normals);
 
     // Save Features to CSV
-    saveFeaturesToCSV(cloud_after_downsampling, cloud_normals, file_path);
+    // saveFeaturesToCSV(cloud_after_downsampling, cloud_normals, file_path);
    
     // Introducing a delay for analyzing results
     ROS_INFO("-----------------------------------------------------------------------------------");
@@ -386,20 +391,23 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "pcl_node");
     ros::NodeHandle nh;
 
-    // Check if the folder exists
-    struct stat info;
-    if (stat(FOLDER_PATH.c_str(), &info) != 0) {
-        ROS_ERROR("The provided folder path does not exist.");
-        return -1;
-    }
+    // // Check if the folder exists
+    // struct stat info;
+    // if (stat(FOLDER_PATH.c_str(), &info) != 0) {
+    //     ROS_ERROR("The provided folder path does not exist.");
+    //     return -1;
+    // }
 
-    if (std::remove(file_path.c_str()) == 0) {
-        ROS_INFO("Removed existing file: %s", file_path.c_str());
-    }
+    // if (std::remove(file_path.c_str()) == 0) {
+    //     ROS_INFO("Removed existing file: %s", file_path.c_str());
+    // }
 
 
     // Publishers
 
+    // Increasing line separation with downsampling
+    pub_after_downsampling_before_noise = nh.advertise<sensor_msgs::PointCloud2>("/dw_before_noise", 1);
+ 
     // Noisy cloud publisher
     pub_after_adding_noise = nh.advertise<sensor_msgs::PointCloud2>("/noisy_cloud", 1);
 
