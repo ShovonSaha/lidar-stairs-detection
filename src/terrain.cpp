@@ -71,13 +71,13 @@ ros::Publisher pub_after_adding_noise;
 
 // ros::Publisher marker_pub;
 
-// std::vector<pcl::ModelCoefficients> plane_coefficients;
-
 // Base Directory
-// const std::string FOLDER_PATH = "/home/nrelab-titan/Desktop/shovon/data/terrain_analysis";
+// const std::string FOLDER_PATH = "/home/nrelab-titan/Desktop/shovon/data/terrain_analysis"; // Titan PC DIrectory
 
 // Noisy CSV File Directory
-const std::string FOLDER_PATH = "/home/nrelab-titan/Desktop/shovon/data/terrain_analysis/noisy_csv_files";
+// const std::string FOLDER_PATH = "/home/nrelab-titan/Desktop/shovon/data/terrain_analysis/noisy_csv_files"; // Titan PC DIrectory
+
+const std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/noise_csv_files"; // Asus Laptop DIrectory
 
 // std::string file_path = FOLDER_PATH + "/carpet_normals.csv";
 // std::string file_path = FOLDER_PATH + "/plain_normals.csv";
@@ -92,19 +92,32 @@ const std::string FOLDER_PATH = "/home/nrelab-titan/Desktop/shovon/data/terrain_
 
 // Noisy Point Cloud Features
 
+// Noise: 4 mm
+float noise_stddev = 0.004;  // 4 mm = 0.004 in meters
+// std::string file_path = FOLDER_PATH + "/plain_terrain_features_4_mm.csv";
+std::string file_path = FOLDER_PATH + "/grass_terrain_features_4_mm.csv";
+
+// Noise: 6 mm
+// float noise_stddev = 0.006;  // 6 mm
+// std::string file_path = FOLDER_PATH + "/plain_terrain_features_6_mm.csv";
+// std::string file_path = FOLDER_PATH + "/grass_terrain_features_6_mm.csv";
+
+// Noise: 8 mm
+// float noise_stddev = 0.008;  // 8 mm
+// std::string file_path = FOLDER_PATH + "/plain_terrain_features_8_mm.csv";
+// std::string file_path = FOLDER_PATH + "/grass_terrain_features_8_mm.csv";
+
 // Noise: 10 mm
+// float noise_stddev = 0.010;  // 10 mm
 // std::string file_path = FOLDER_PATH + "/plain_terrain_features_10_mm.csv";
 // std::string file_path = FOLDER_PATH + "/grass_terrain_features_10_mm.csv";
 
-// Noise: 20 mm
-// std::string file_path = FOLDER_PATH + "/plain_terrain_features_20_mm.csv";
-// std::string file_path = FOLDER_PATH + "/grass_terrain_features_20_mm.csv";
-
 bool write_header = true;
 
-float noise_stddev = 0.01;  // 10 mm = 0.01 in meters
 
-
+// -------------------------------------------------------------------------------------------------------------------------------------------
+// END OF VARIABLE INITIALIZATION  
+// -------------------------------------------------------------------------------------------------------------------------------------------
 
 // Function to publish a point cloud
 void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, const ros::Publisher& publisher, const sensor_msgs::PointCloud2ConstPtr& original_msg) {
@@ -139,7 +152,7 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr passthroughFilterX(const pcl::PointCloud<pc
     pass.setFilterFieldName("x");
     // pass.setFilterLimits(0, 2); // Parameter for plain terrain
 
-    pass.setFilterLimits(2, 3.5); // Readjusted limit fo grass terrain as there is a concrete floor infront of the lidar before the grass terrain starts
+    pass.setFilterLimits(1.5, 3); // Readjusted limit fo grass terrain as there is a concrete floor infront of the lidar before the grass terrain starts
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZI>);
     pass.filter(*cloud_filtered_x);
@@ -152,7 +165,7 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr passthroughFilterY(const pcl::PointCloud<pc
     pcl::PassThrough<pcl::PointXYZI> pass;
     pass.setInputCloud(cloud);
     pass.setFilterFieldName("y");
-    pass.setFilterLimits(-0.3, 0.3);
+    pass.setFilterLimits(-0.6, 0.6);
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZI>);
     pass.filter(*cloud_filtered_y);
@@ -172,42 +185,6 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr voxelGridDownsampling(const pcl::PointCloud
 
     return cloud_downsampled;
 }
-
-
-// // Statistical Outlier Removal (SOR) Filter
-// pcl::PointCloud<pcl::PointXYZI>::Ptr statisticalOutlierRemoval(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
-//     pcl::StatisticalOutlierRemoval<pcl::PointXYZI> sor;
-//     sor.setInputCloud(cloud);
-//     sor.setMeanK(30); // Number of nearest neighbors to use for mean distance estimation
-//     sor.setStddevMulThresh(0.5); // Standard deviation multiplier threshold
-//     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZI>);
-//     sor.filter(*cloud_filtered);
-//     return cloud_filtered;
-// }
-
-
-// // Low-Pass Filter using Moving Least Squares (MLS)
-// pcl::PointCloud<pcl::PointXYZI>::Ptr lowPassFilterMLS(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
-//     pcl::MovingLeastSquares<pcl::PointXYZI, pcl::PointXYZI> mls;
-//     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_smoothed(new pcl::PointCloud<pcl::PointXYZI>);
-
-//     mls.setInputCloud(cloud);
-//     mls.setComputeNormals(false);
-//     mls.setPolynomialOrder(0);  // Set the polynomial order for the MLS algorithm
-//                                 // Order: 0 for averaging.
-//                                 // Order: 1 for fitting a plane.
-//                                 // Order: 2 for fitting a curve (quadratic).
-//                                 // Order: >2 for fitting a more complicated curve. (will require more computation)
-//     mls.setSearchMethod(pcl::search::KdTree<pcl::PointXYZI>::Ptr(new pcl::search::KdTree<pcl::PointXYZI>));
-//     mls.setSearchRadius(0.08);  // Set the search radius for the MLS algorithm
-
-//     mls.process(*cloud_smoothed);
-
-//     return cloud_smoothed;
-// }
-
-
-
 
 
 // ----------------------------------------------------------------------------------
@@ -305,6 +282,17 @@ void saveFeaturesToCSV(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, const 
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
 // ----------------------------------------------------------------------------------
 // POINTCLOUD CALLBACK
 // ----------------------------------------------------------------------------------
@@ -319,9 +307,9 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     ROS_INFO("Raw PointCloud: %ld points", cloud->points.size());
 
     // Downsampling to increase the line separation in lidar
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling_before_noise = voxelGridDownsampling(cloud, 0.02f, 0.02f, 0.02f);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling_before_noise = voxelGridDownsampling(cloud, 0.05f, 0.05f, 0.05f);
     publishProcessedCloud(cloud_after_downsampling_before_noise, pub_after_downsampling_before_noise, input_msg);
-    ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling_before_noise->points.size());
+    ROS_INFO("After Downsampling before adding noise: %ld points", cloud_after_downsampling_before_noise->points.size());
 
     // Add Gaussian noise to the cloud
     pcl::PointCloud<pcl::PointXYZI>::Ptr noisy_cloud = addGaussianNoise(cloud_after_downsampling_before_noise, noise_stddev);
@@ -343,7 +331,7 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     ROS_INFO("After Passthough filter Y: %ld points", cloud_after_passthrough_y->points.size());
 
     // Downsampling
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling = voxelGridDownsampling(cloud_after_passthrough_y, 0.08f, 0.08f, 0.005f);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling = voxelGridDownsampling(cloud_after_passthrough_y, 0.13f, 0.13f, 0.05f);
     publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
     ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
 
@@ -371,12 +359,14 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // visualizeNormals(cloud_after_downsampling, cloud_normals);
 
     // Save Features to CSV
-    // saveFeaturesToCSV(cloud_after_downsampling, cloud_normals, file_path);
+    saveFeaturesToCSV(cloud_after_downsampling, cloud_normals, file_path);
    
     // Introducing a delay for analyzing results
     ROS_INFO("-----------------------------------------------------------------------------------");
     // ros::Duration(0.5).sleep();
 }
+
+
 
 
 
