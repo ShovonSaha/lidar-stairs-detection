@@ -3,6 +3,7 @@ project(stat_analysis)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
+set(CMAKE_CXX_STANDARD 17)
 
 # if(NOT CMAKE_BUILD_TYPE)
 #   set(CMAKE_BUILD_TYPE Release)
@@ -218,6 +219,10 @@ add_definitions(${PCL_DEFINITIONS})
 
 add_executable(terrain src/terrain.cpp) # Saves values in csv files for in-depth terrain classification algorithm (done later on python) 
 
+# Model training an predicting
+add_executable(model_training src/model_training.cpp) # Loads features from the CSV file and trains the model 
+add_executable(model_predicting src/model_predicting.cpp) # Uses the model to predict the train in real-time
+
 # add_executable(pcl_viewer src/pcl_viewer.cpp)
 
 ## Rename C++ executable without prefix
@@ -296,6 +301,20 @@ target_link_libraries(terrain
   # armadillo
   # OpenMP::OpenMP_CXX
 )
+
+
+target_link_libraries(model_training
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  /home/shovon/Downloads/libsvm-3.34/svm.cpp  # SVM library: Use absolute path
+)
+
+target_link_libraries(model_predicting
+  ${catkin_LIBRARIES}
+  ${PCL_LIBRARIES}
+  /home/shovon/Downloads/libsvm-3.34/svm.cpp  # SVM library: Use absolute path
+)
+
 
 # target_link_libraries(pcl_viewer 
 #   ${catkin_LIBRARIES}
