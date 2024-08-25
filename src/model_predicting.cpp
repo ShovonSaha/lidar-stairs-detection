@@ -326,7 +326,7 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     auto prediction_start = std::chrono::high_resolution_clock::now();
 
     // Predict the terrain type using the saved SVM model.
-    int expected_label = 1; // expected_label for grass = 1, plain = 0
+    int expected_label = 0; // expected_label for grass = 1, plain = 0
     double accuracy = predictTerrainType(cloud_normals, expected_label); 
 
     auto prediction_end = std::chrono::high_resolution_clock::now();

@@ -1,6 +1,7 @@
 #include <ros/ros.h>
+#include <rosbag/bag.h>
+#include <rosbag/view.h>
 #include <sensor_msgs/PointCloud2.h>
-
 
 #include <pcl/common/common.h>
 #include <pcl/common/io.h>
@@ -93,13 +94,13 @@ const std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysi
 // Noisy Point Cloud Features
 
 // Noise: 4 mm
-float noise_stddev = 0.004;  // 4 mm = 0.004 in meters
+// float noise_stddev = 0.004;  // 4 mm = 0.004 in meters
 // std::string file_path = FOLDER_PATH + "/plain_terrain_features_4_mm.csv";
-std::string file_path = FOLDER_PATH + "/grass_terrain_features_4_mm.csv";
+// std::string file_path = FOLDER_PATH + "/grass_terrain_features_4_mm.csv";
 
 // Noise: 6 mm
-// float noise_stddev = 0.006;  // 6 mm
-// std::string file_path = FOLDER_PATH + "/plain_terrain_features_6_mm.csv";
+float noise_stddev = 0.006;  // 6 mm
+std::string file_path = FOLDER_PATH + "/plain_terrain_features_6_mm.csv";
 // std::string file_path = FOLDER_PATH + "/grass_terrain_features_6_mm.csv";
 
 // Noise: 8 mm
@@ -113,6 +114,13 @@ std::string file_path = FOLDER_PATH + "/grass_terrain_features_4_mm.csv";
 // std::string file_path = FOLDER_PATH + "/grass_terrain_features_10_mm.csv";
 
 bool write_header = true;
+
+// Define the path to save the rosbag
+// std::string bag_file_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/rosbags_noisy/plain_noisy_10_mm.bag";
+// std::string bag_file_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/rosbags_noisy/grass_noisy_4_mm.bag";
+
+// Create and open the bag file
+// rosbag::Bag bag;
 
 
 // -------------------------------------------------------------------------------------------------------------------------------------------
@@ -316,6 +324,13 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     publishProcessedCloud(noisy_cloud, pub_after_adding_noise, input_msg);
     ROS_INFO("Noisy PointCloud: %ld points with %.3f noise stddev", noisy_cloud->points.size(), noise_stddev);
 
+    // // Convert the noisy cloud back to ROS message and write to bag
+    // sensor_msgs::PointCloud2 noisy_cloud_msg;
+    // pcl::toROSMsg(*noisy_cloud, noisy_cloud_msg);
+    // noisy_cloud_msg.header = input_msg->header;
+    // bag.write("/noisy_cloud", ros::Time::now(), noisy_cloud_msg);
+    // ROS_INFO("Noisy cloud added to rosbag");
+
     // Passthrough Filtering
     // pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_z = passthroughFilterZ(cloud);
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_z = passthroughFilterZ(noisy_cloud); // Noisy Cloud as input
@@ -334,16 +349,6 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling = voxelGridDownsampling(cloud_after_passthrough_y, 0.13f, 0.13f, 0.05f);
     publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
     ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
-
-    // // Outlier Removal
-    // pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_outlier_removal = statisticalOutlierRemoval(cloud_after_downsampling);
-    // publishProcessedCloud(cloud_after_outlier_removal, pub_after_outlier_removal, input_msg);
-    // ROS_INFO("After Outlier Removal: %ld points", cloud_after_outlier_removal->points.size());
-
-    // // Low-Pass Filter
-    // pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_lowpass = lowPassFilterMLS(cloud_after_downsampling);
-    // publishProcessedCloud(cloud_after_lowpass, pub_after_lowpass, input_msg);
-    // ROS_INFO("After Lowpass Filter: %ld points", cloud_after_lowpass->points.size());  
 
     // Normal Estimation and Visualization
     int k_neighbors = std::max(10, static_cast<int>(cloud_after_downsampling->points.size() / 5));
@@ -381,17 +386,20 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "pcl_node");
     ros::NodeHandle nh;
 
-    // // Check if the folder exists
-    // struct stat info;
-    // if (stat(FOLDER_PATH.c_str(), &info) != 0) {
-    //     ROS_ERROR("The provided folder path does not exist.");
-    //     return -1;
-    // }
+    // Check if the folder exists
+    struct stat info;
+    if (stat(FOLDER_PATH.c_str(), &info) != 0) {
+        ROS_ERROR("The provided folder path does not exist.");
+        return -1;
+    }
 
-    // if (std::remove(file_path.c_str()) == 0) {
-    //     ROS_INFO("Removed existing file: %s", file_path.c_str());
-    // }
+    if (std::remove(file_path.c_str()) == 0) {
+        ROS_INFO("Removed existing file: %s", file_path.c_str());
+    }
 
+    // // Open the bag for writing
+    // bag.open(bag_file_path, rosbag::bagmode::Write);
+    // ROS_INFO("Empty ROSBag created successfully.");
 
     // Publishers
 
@@ -401,7 +409,7 @@ int main(int argc, char** argv) {
     // Noisy cloud publisher
     pub_after_adding_noise = nh.advertise<sensor_msgs::PointCloud2>("/noisy_cloud", 1);
 
-    // Pre-processing steps
+    // // Pre-processing steps
     pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_x", 1);
     pub_after_passthrough_y = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_y", 1);
     pub_after_passthrough_z = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_z", 1);

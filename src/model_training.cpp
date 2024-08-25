@@ -58,14 +58,14 @@ std::vector<FeatureData> loadCSV(const std::string& filename, int label) {
 }
 
 // Function to train SVM using LibSVM and save the model
+// Function to train SVM using LibSVM and save the model
 void trainAndSaveSVMModel(const std::vector<FeatureData>& data, const std::string& save_directory) {
     std::cout << "Starting SVM training with " << data.size() << " samples." << std::endl;
 
     svm_parameter param;
     param.svm_type = C_SVC;
-    param.kernel_type = RBF;
+    param.kernel_type = LINEAR;  // Changed from RBF to LINEAR
     param.C = 100;
-    param.gamma = 0.1;
     param.cache_size = 100;
     param.eps = 1e-3;
     param.nr_weight = 0;
@@ -151,7 +151,7 @@ int main() {
     all_data.insert(all_data.end(), grass_10mm.begin(), grass_10mm.end());
 
     // Training percentage
-    double train_percentage = 0.10; // 0.05 = 5% of the data used for training
+    double train_percentage = 0.30; // 0.05 = 5% of the data used for training
 
     // Select a subset of data for training based on the training percentage
     std::vector<FeatureData> train_data = selectTrainingData(all_data, train_percentage);
