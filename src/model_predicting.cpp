@@ -60,6 +60,8 @@ ros::Publisher pub_after_downsampling;
 // Path to save the results
 std::string csv_file_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/performance_metrics.csv";
 
+int expected_label = 0; // expected_label for grass = 1, plain = 0
+
 
 // ----------------------------------------------------------------------------------
 // PREPROCESSING STEPS
@@ -326,7 +328,6 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     auto prediction_start = std::chrono::high_resolution_clock::now();
 
     // Predict the terrain type using the saved SVM model.
-    int expected_label = 0; // expected_label for grass = 1, plain = 0
     double accuracy = predictTerrainType(cloud_normals, expected_label); 
 
     auto prediction_end = std::chrono::high_resolution_clock::now();
@@ -355,7 +356,10 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
 
 
 // ROS main function
+// int main(int argc, char** argv) {rslidar_points
 int main(int argc, char** argv) {
+
+    // Initialize the ROS node
     ros::init(argc, argv, "terrain_classification_node");
     ros::NodeHandle nh;
 
@@ -363,6 +367,10 @@ int main(int argc, char** argv) {
     std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model";
     loadSVMModel(model_path);
     ROS_INFO("Model Loaded Sucessfully.");
+
+    ROS_INFO("Expected label is: %d", expected_label);
+
+    ROS_INFO("Play Plain rosbag if 0 or Grass rosbag if 1.");
 
     // ROS Publishers
     pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_x", 1);
@@ -372,7 +380,10 @@ int main(int argc, char** argv) {
     
     // Subscribing to Lidar Sensor topic
     // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
-    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
+    // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
+
+    // Subscribing to Lidar Sensor topic for Noisy PointCloud
+    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/noisy_cloud", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
     
     ros::spin();
 
