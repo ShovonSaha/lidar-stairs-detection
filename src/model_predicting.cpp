@@ -57,6 +57,8 @@ ros::Publisher pub_after_passthrough_y;
 ros::Publisher pub_after_passthrough_z;
 ros::Publisher pub_after_downsampling;
 
+// Path to save the results
+std::string csv_file_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/performance_metrics.csv";
 
 
 // ----------------------------------------------------------------------------------
@@ -192,11 +194,11 @@ void loadSVMModel(const std::string& model_path) {
 }
 
 // Function to extract features and predict the terrain type
-double predictTerrainType(const pcl::PointCloud<pcl::Normal>::Ptr& cloud_normals) {
+double predictTerrainType(const pcl::PointCloud<pcl::Normal>::Ptr& cloud_normals, int expected_label) {
     int correct_predictions = 0;
     int total_points = cloud_normals->points.size();
 
-    auto start = std::chrono::high_resolution_clock::now();
+    // auto start = std::chrono::high_resolution_clock::now();
 
     #pragma omp parallel for reduction(+:correct_predictions)
     for (int i = 0; i < total_points; ++i) {
@@ -209,20 +211,39 @@ double predictTerrainType(const pcl::PointCloud<pcl::Normal>::Ptr& cloud_normals
 
         double label = svm_predict(model, nodes);
 
-        // Example accuracy check (this depends on having ground truth data)
-        if (label == 1) {
+        if (label == expected_label) {
             correct_predictions++;
         }
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> diff = end - start;
-    std::cout << "Time taken for prediction: " << diff.count() << " seconds" << std::endl;
+    // auto end = std::chrono::high_resolution_clock::now();
+    // std::chrono::duration<double> diff = end - start;
+    // std::cout << "Time taken for prediction: " << diff.count() << " seconds" << std::endl;
 
     return static_cast<double>(correct_predictions) / total_points;
 }
 
 
+// ----------------------------------------------------------------------------------
+// SAVING TIMING AND ACCURACY VALUES
+// ----------------------------------------------------------------------------------
+
+void logResultsToCSV(const std::string& file_path, double pre_process_time, double feature_extraction_time, double prediction_time, double accuracy) {
+    std::ofstream file;
+
+    // Open the file in append mode
+    file.open(file_path, std::ios::app);
+
+    // Check if the file exists; if not, create it and write the header
+    if (file.tellp() == 0) {
+        file << "Preprocessing Time (s),Feature Extraction Time (s),Prediction Time (s),Accuracy\n";
+    }
+
+    // Write the data
+    file << pre_process_time << "," << feature_extraction_time << "," << prediction_time << "," << accuracy << "\n";
+
+    file.close();
+}
 
 
 
@@ -271,14 +292,15 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     auto pre_process_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> pre_process_time = pre_process_end - pre_process_start;
     std::cout << "Time taken for preprocessing (filters to downsampling): " << pre_process_time.count() << " seconds" << std::endl;
-
     // ------------------------------------------------------------------------------
 
     
-    // NORMAL EXTRACTION >>> FEATURE EXTRACTION 
+    // FEATURE EXTRACTION (NORMAL EXTRACTION)
     // ------------------------------------------------------------------------------
     
     // Normal Estimation and Visualization
+    auto feature_extraction_start = std::chrono::high_resolution_clock::now();
+    
     int k_neighbors = std::max(10, static_cast<int>(cloud_after_downsampling->points.size() / 5));
     ROS_INFO("Using %d neighbors for normal estimation.", k_neighbors);
 
@@ -290,6 +312,10 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
         return; 
     }
 
+    auto feature_extraction_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> feature_extraction_time = feature_extraction_end - feature_extraction_start;
+    std::cout << "Time taken for feature extraction: " << feature_extraction_time.count() << " seconds" << std::endl;
+
     // Normal Visualization
     // visualizeNormals(cloud_after_downsampling, cloud_normals);
     // ------------------------------------------------------------------------------
@@ -297,12 +323,22 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
 
     // PREDICTION 
     // ------------------------------------------------------------------------------
-    
-    // Predict the terrain type using the SVM model
-    double accuracy = predictTerrainType(cloud_normals);
-    std::cout << "Prediction accuracy: " << accuracy << std::endl;
-    
-    
+    auto prediction_start = std::chrono::high_resolution_clock::now();
+
+    // Predict the terrain type using the saved SVM model.
+    int expected_label = 1; // expected_label for grass = 1, plain = 0
+    double accuracy = predictTerrainType(cloud_normals, expected_label); 
+
+    auto prediction_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> prediction_time = prediction_end - prediction_start;
+
+    std::cout << "Prediction accuracy for this frame: " << accuracy << std::endl;
+    std::cout << "Time taken for prediction: " << prediction_time.count() << " seconds" << std::endl;
+    // ------------------------------------------------------------------------------
+
+    // Log the results to CSV
+    logResultsToCSV(csv_file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy);
+
     // Introducing a delay for analyzing results
     ROS_INFO("-----------------------------------------------------------------------------------");
     // ros::Duration(0.5).sleep();
@@ -326,7 +362,7 @@ int main(int argc, char** argv) {
     // Load the trained SVM model
     std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model";
     loadSVMModel(model_path);
-    ROS_INFO("Model loaded");
+    ROS_INFO("Model Loaded Sucessfully.");
 
     // ROS Publishers
     pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_x", 1);
