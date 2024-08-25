@@ -266,13 +266,13 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     
     // Combined Passthrough Filtering to reduce function calls
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_combined_passthrough = combinedPassthroughFilter(cloud);
-    publishProcessedCloud(cloud_after_combined_passthrough, pub_after_combined_passthrough, input_msg);
-    ROS_INFO("After Combined Passthough filter: %ld points", cloud_after_combined_passthrough->points.size());
+    // publishProcessedCloud(cloud_after_combined_passthrough, pub_after_combined_passthrough, input_msg);
+    // ROS_INFO("After Combined Passthough filter: %ld points", cloud_after_combined_passthrough->points.size());
 
     // Parallel Downsampling
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_parallel_downsampling = parallelVoxelGridDownsampling(cloud_after_combined_passthrough, 0.13f, 0.13f, 0.05f);
-    publishProcessedCloud(cloud_after_parallel_downsampling, pub_after_parallel_downsampling, input_msg);
-    ROS_INFO("After Parallel Downsampling: %ld points", cloud_after_parallel_downsampling->points.size());
+    // publishProcessedCloud(cloud_after_parallel_downsampling, pub_after_parallel_downsampling, input_msg);
+    // ROS_INFO("After Parallel Downsampling: %ld points", cloud_after_parallel_downsampling->points.size());
     
     auto pre_process_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> pre_process_time = pre_process_end - pre_process_start;
