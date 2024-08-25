@@ -78,7 +78,11 @@ ros::Publisher pub_after_adding_noise;
 // Noisy CSV File Directory
 // const std::string FOLDER_PATH = "/home/nrelab-titan/Desktop/shovon/data/terrain_analysis/noisy_csv_files"; // Titan PC DIrectory
 
-const std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/noise_csv_files"; // Asus Laptop DIrectory
+const std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files"; // Asus Laptop DIrectory
+
+// File Path for saving the features without noise
+// std::string file_path = FOLDER_PATH + "/plain_terrain_features_no_noise.csv";
+std::string file_path = FOLDER_PATH + "/grass_terrain_features_no_noise.csv";
 
 // std::string file_path = FOLDER_PATH + "/carpet_normals.csv";
 // std::string file_path = FOLDER_PATH + "/plain_normals.csv";
@@ -99,8 +103,8 @@ const std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysi
 // std::string file_path = FOLDER_PATH + "/grass_terrain_features_4_mm.csv";
 
 // Noise: 6 mm
-float noise_stddev = 0.006;  // 6 mm
-std::string file_path = FOLDER_PATH + "/plain_terrain_features_6_mm.csv";
+// float noise_stddev = 0.006;  // 6 mm
+// std::string file_path = FOLDER_PATH + "/plain_terrain_features_6_mm.csv";
 // std::string file_path = FOLDER_PATH + "/grass_terrain_features_6_mm.csv";
 
 // Noise: 8 mm
@@ -314,17 +318,18 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     pcl::fromROSMsg(*input_msg, *cloud);
     ROS_INFO("Raw PointCloud: %ld points", cloud->points.size());
 
-    // Downsampling to increase the line separation in lidar
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling_before_noise = voxelGridDownsampling(cloud, 0.05f, 0.05f, 0.05f);
-    publishProcessedCloud(cloud_after_downsampling_before_noise, pub_after_downsampling_before_noise, input_msg);
-    ROS_INFO("After Downsampling before adding noise: %ld points", cloud_after_downsampling_before_noise->points.size());
+    // // Downsampling to increase the line separation in lidar
+    // pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling_before_noise = voxelGridDownsampling(cloud, 0.05f, 0.05f, 0.05f);
+    // publishProcessedCloud(cloud_after_downsampling_before_noise, pub_after_downsampling_before_noise, input_msg);
+    // ROS_INFO("After Downsampling before adding noise: %ld points", cloud_after_downsampling_before_noise->points.size());
 
-    // Add Gaussian noise to the cloud
-    pcl::PointCloud<pcl::PointXYZI>::Ptr noisy_cloud = addGaussianNoise(cloud_after_downsampling_before_noise, noise_stddev);
-    publishProcessedCloud(noisy_cloud, pub_after_adding_noise, input_msg);
-    ROS_INFO("Noisy PointCloud: %ld points with %.3f noise stddev", noisy_cloud->points.size(), noise_stddev);
+    // // Add Gaussian noise to the cloud
+    // pcl::PointCloud<pcl::PointXYZI>::Ptr noisy_cloud = addGaussianNoise(cloud_after_downsampling_before_noise, noise_stddev);
+    // publishProcessedCloud(noisy_cloud, pub_after_adding_noise, input_msg);
+    // ROS_INFO("Noisy PointCloud: %ld points with %.3f noise stddev", noisy_cloud->points.size(), noise_stddev);
 
-    // // Convert the noisy cloud back to ROS message and write to bag
+
+    // // FOR SAVING NOISY POINTCLOUD TO ROSBAG: Convert the noisy cloud back to ROS message and write to bag
     // sensor_msgs::PointCloud2 noisy_cloud_msg;
     // pcl::toROSMsg(*noisy_cloud, noisy_cloud_msg);
     // noisy_cloud_msg.header = input_msg->header;
@@ -332,8 +337,8 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // ROS_INFO("Noisy cloud added to rosbag");
 
     // Passthrough Filtering
-    // pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_z = passthroughFilterZ(cloud);
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_z = passthroughFilterZ(noisy_cloud); // Noisy Cloud as input
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_z = passthroughFilterZ(cloud);
+    // pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_z = passthroughFilterZ(noisy_cloud); // Noisy Cloud as input
     publishProcessedCloud(cloud_after_passthrough_z, pub_after_passthrough_z, input_msg);
     ROS_INFO("After Passthough filter Z: %ld points", cloud_after_passthrough_z->points.size());
     
@@ -360,7 +365,6 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
         return; // Skip writing to CSV if normals are empty
     }
 
-    // pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_downsampling, k_neighbors);
     // visualizeNormals(cloud_after_downsampling, cloud_normals);
 
     // Save Features to CSV
@@ -403,24 +407,21 @@ int main(int argc, char** argv) {
 
     // Publishers
 
-    // Increasing line separation with downsampling
-    pub_after_downsampling_before_noise = nh.advertise<sensor_msgs::PointCloud2>("/dw_before_noise", 1);
+    // // Increasing line separation with downsampling
+    // pub_after_downsampling_before_noise = nh.advertise<sensor_msgs::PointCloud2>("/dw_before_noise", 1);
  
-    // Noisy cloud publisher
-    pub_after_adding_noise = nh.advertise<sensor_msgs::PointCloud2>("/noisy_cloud", 1);
+    // // Noisy cloud publisher
+    // pub_after_adding_noise = nh.advertise<sensor_msgs::PointCloud2>("/noisy_cloud", 1);
 
-    // // Pre-processing steps
+    // Pre-processing steps
     pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_x", 1);
     pub_after_passthrough_y = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_y", 1);
     pub_after_passthrough_z = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_z", 1);
     pub_after_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/downsampled_cloud", 1);
-    // pub_after_outlier_removal = nh.advertise<sensor_msgs::PointCloud2>("/outlier_removed_cloud", 1);
-    // pub_after_lowpass = nh.advertise<sensor_msgs::PointCloud2>("/lowpass_cloud", 1);
     
     // Subscribing to Lidar Sensor topic
     // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
     ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
-    
     
     ros::spin();
 

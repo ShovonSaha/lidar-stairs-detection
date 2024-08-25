@@ -126,32 +126,43 @@ int main() {
     std::vector<FeatureData> all_data;
 
     // Load data from all CSV files for different noise levels and terrain types
-    auto plain_4mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/noise_csv_files/plain_terrain_features_4_mm.csv", 0);
+
+    // With No Noise
+    auto plain_no_noise = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files/plain_terrain_features_no_noise.csv", 0);
+    all_data.insert(all_data.end(), plain_no_noise.begin(), plain_no_noise.end());
+    
+    auto grass_no_noise = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files/grass_terrain_features_no_noise.csv", 1);
+    all_data.insert(all_data.end(), grass_no_noise.begin(), grass_no_noise.end());
+
+    // With Noise Levels from 4 mm to 10 mm (increments of 2 mm)
+    // Plain Terrains
+    auto plain_4mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files/plain_terrain_features_4_mm.csv", 0);
     all_data.insert(all_data.end(), plain_4mm.begin(), plain_4mm.end());
 
-    auto plain_6mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/noise_csv_files/plain_terrain_features_6_mm.csv", 0);
+    auto plain_6mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files/plain_terrain_features_6_mm.csv", 0);
     all_data.insert(all_data.end(), plain_6mm.begin(), plain_6mm.end());
 
-    auto plain_8mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/noise_csv_files/plain_terrain_features_8_mm.csv", 0);
+    auto plain_8mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files/plain_terrain_features_8_mm.csv", 0);
     all_data.insert(all_data.end(), plain_8mm.begin(), plain_8mm.end());
 
-    auto plain_10mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/noise_csv_files/plain_terrain_features_10_mm.csv", 0);
+    auto plain_10mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files/plain_terrain_features_10_mm.csv", 0);
     all_data.insert(all_data.end(), plain_10mm.begin(), plain_10mm.end());
 
-    auto grass_4mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/noise_csv_files/grass_terrain_features_4_mm.csv", 1);
+    // Grass Terrains
+    auto grass_4mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files/grass_terrain_features_4_mm.csv", 1);
     all_data.insert(all_data.end(), grass_4mm.begin(), grass_4mm.end());
 
-    auto grass_6mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/noise_csv_files/grass_terrain_features_6_mm.csv", 1);
+    auto grass_6mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files/grass_terrain_features_6_mm.csv", 1);
     all_data.insert(all_data.end(), grass_6mm.begin(), grass_6mm.end());
 
-    auto grass_8mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/noise_csv_files/grass_terrain_features_8_mm.csv", 1);
+    auto grass_8mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files/grass_terrain_features_8_mm.csv", 1);
     all_data.insert(all_data.end(), grass_8mm.begin(), grass_8mm.end());
 
-    auto grass_10mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/noise_csv_files/grass_terrain_features_10_mm.csv", 1);
+    auto grass_10mm = loadCSV("/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files/grass_terrain_features_10_mm.csv", 1);
     all_data.insert(all_data.end(), grass_10mm.begin(), grass_10mm.end());
 
     // Training percentage
-    double train_percentage = 0.30; // 0.05 = 5% of the data used for training
+    double train_percentage = 0.99999; // 0.05 = 5% of the data used for training
 
     // Select a subset of data for training based on the training percentage
     std::vector<FeatureData> train_data = selectTrainingData(all_data, train_percentage);
