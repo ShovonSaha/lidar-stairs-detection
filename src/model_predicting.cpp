@@ -52,10 +52,12 @@
 
 
 // ROS Publishers
-ros::Publisher pub_after_passthrough_x;
-ros::Publisher pub_after_passthrough_y;
-ros::Publisher pub_after_passthrough_z;
-ros::Publisher pub_after_downsampling;
+
+// Combined passthrough filtering
+ros::Publisher pub_after_combined_passthrough;
+
+// Parralel Downsampling
+ros::Publisher pub_after_parallel_downsampling;
 
 // Path to save the results
 std::string csv_file_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/performance_metrics.csv";
@@ -68,84 +70,65 @@ int expected_label = 0; // expected_label for grass = 1, plain = 0
 // ----------------------------------------------------------------------------------
 
 // Function to publish a point cloud
-void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, const ros::Publisher& publisher, const sensor_msgs::PointCloud2ConstPtr& original_msg) {
+void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const ros::Publisher& publisher, const sensor_msgs::PointCloud2ConstPtr& original_msg) {
     sensor_msgs::PointCloud2 output_msg;
     pcl::toROSMsg(*cloud, output_msg);
     output_msg.header = original_msg->header;
     publisher.publish(output_msg);
 }
 
-// First stage filter
-pcl::PointCloud<pcl::PointXYZI>::Ptr passthroughFilterZ(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
-    pcl::PassThrough<pcl::PointXYZI> pass;
+// Combined Passthrough Filtering to reduce function calls
+pcl::PointCloud<pcl::PointXYZ>::Ptr combinedPassthroughFilter(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
+    pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud);
+    
     pass.setFilterFieldName("z");
     pass.setFilterLimits(-0.7, 0.2);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
+    pass.filter(*cloud_filtered);
 
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_z(new pcl::PointCloud<pcl::PointXYZI>);
-    pass.filter(*cloud_filtered_z);
-
-    return cloud_filtered_z;
-}
-
-// Second stage filter
-pcl::PointCloud<pcl::PointXYZI>::Ptr passthroughFilterX(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
-    pcl::PassThrough<pcl::PointXYZI> pass;
-    pass.setInputCloud(cloud);
+    pass.setInputCloud(cloud_filtered);
     pass.setFilterFieldName("x");
-    // pass.setFilterLimits(0, 2); // Parameter for plain terrain
+    pass.setFilterLimits(1.5, 3);
+    pass.filter(*cloud_filtered);
 
-    pass.setFilterLimits(1.5, 3); // Readjusted limit fo grass terrain as there is a concrete floor infront of the lidar before the grass terrain starts
-
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZI>);
-    pass.filter(*cloud_filtered_x);
-
-    return cloud_filtered_x;
-}
-
-// Third stage filter
-pcl::PointCloud<pcl::PointXYZI>::Ptr passthroughFilterY(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
-    pcl::PassThrough<pcl::PointXYZI> pass;
-    pass.setInputCloud(cloud);
+    pass.setInputCloud(cloud_filtered);
     pass.setFilterFieldName("y");
     pass.setFilterLimits(-0.6, 0.6);
+    pass.filter(*cloud_filtered);
 
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZI>);
-    pass.filter(*cloud_filtered_y);
-
-    return cloud_filtered_y;
+    return cloud_filtered;
 }
 
-
-// Voxel Grid Downsampling
-pcl::PointCloud<pcl::PointXYZI>::Ptr voxelGridDownsampling(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, float leaf_size_x, float leaf_size_y, float leaf_size_z) {
-    pcl::VoxelGrid<pcl::PointXYZI> voxel_grid;
+// Parallelize Downsampling using OpenMP
+pcl::PointCloud<pcl::PointXYZ>::Ptr parallelVoxelGridDownsampling(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, float leaf_size_x, float leaf_size_y, float leaf_size_z) {
+    pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+    
     voxel_grid.setInputCloud(cloud);
     voxel_grid.setLeafSize(leaf_size_x, leaf_size_y, leaf_size_z);
 
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_downsampled(new pcl::PointCloud<pcl::PointXYZI>);
-    voxel_grid.filter(*cloud_downsampled);
-
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_downsampled(new pcl::PointCloud<pcl::PointXYZ>);
+    
+    #pragma omp parallel
+    {
+        voxel_grid.filter(*cloud_downsampled);
+    }
     return cloud_downsampled;
 }
-
-
-
 
 // ----------------------------------------------------------------------------------
 // NORMAL EXTRACTION
 // ----------------------------------------------------------------------------------
 
 // Compute Normals
-pcl::PointCloud<pcl::Normal>::Ptr computeNormals(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, int k_numbers) {
-    pcl::NormalEstimation<pcl::PointXYZI, pcl::Normal> ne;
+pcl::PointCloud<pcl::Normal>::Ptr computeNormals(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, int k_numbers) {
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
     ne.setInputCloud(cloud);
 
-    pcl::search::KdTree<pcl::PointXYZI>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZI>);
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
     ne.setSearchMethod(tree);
 
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-    // ne.setKSearch(k_numbers); // Ensure k_numbers is valid
 
     if (k_numbers > 0) {
         ne.setKSearch(k_numbers);  // Ensure k_numbers is positive
@@ -179,21 +162,28 @@ void visualizeNormals(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, const p
 // MODEL PREDICTING FUNCTIONS
 // ----------------------------------------------------------------------------------
 
+// Initializing the Feature Structure containing Normals in X and Y directions
 struct FeatureData {
     double normal_x;
     double normal_y;
 };
 
-svm_model* model;
+svm_model* model; // Model Initialization
 
 // Function to load the SVM model
 void loadSVMModel(const std::string& model_path) {
+    ROS_INFO("Attempting to load SVM model from: %s", model_path.c_str());
+
     model = svm_load_model(model_path.c_str());
+    
     if (model == nullptr) {
-        std::cerr << "Failed to load model from " << model_path << std::endl;
+        ROS_ERROR("Failed to load model from %s", model_path.c_str());
         exit(EXIT_FAILURE);
+    } else {
+        ROS_INFO("SVM model loaded successfully from: %s", model_path.c_str());
     }
 }
+
 
 // Function to extract features and predict the terrain type
 double predictTerrainType(const pcl::PointCloud<pcl::Normal>::Ptr& cloud_normals, int expected_label) {
@@ -269,33 +259,25 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     auto pre_process_start = std::chrono::high_resolution_clock::now();
 
     // Convert ROS PointCloud2 message to PCL PointCloud
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    
     pcl::fromROSMsg(*input_msg, *cloud);
     ROS_INFO("Raw PointCloud: %ld points", cloud->points.size());
     
-    // Passthrough Filtering
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_z = passthroughFilterZ(cloud);
-    publishProcessedCloud(cloud_after_passthrough_z, pub_after_passthrough_z, input_msg);
-    ROS_INFO("After Passthough filter Z: %ld points", cloud_after_passthrough_z->points.size());
+    // Combined Passthrough Filtering to reduce function calls
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_combined_passthrough = combinedPassthroughFilter(cloud);
+    publishProcessedCloud(cloud_after_combined_passthrough, pub_after_combined_passthrough, input_msg);
+    ROS_INFO("After Combined Passthough filter: %ld points", cloud_after_combined_passthrough->points.size());
+
+    // Parallel Downsampling
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_parallel_downsampling = parallelVoxelGridDownsampling(cloud_after_combined_passthrough, 0.13f, 0.13f, 0.05f);
+    publishProcessedCloud(cloud_after_parallel_downsampling, pub_after_parallel_downsampling, input_msg);
+    ROS_INFO("After Parallel Downsampling: %ld points", cloud_after_parallel_downsampling->points.size());
     
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_x = passthroughFilterX(cloud_after_passthrough_z);
-    publishProcessedCloud(cloud_after_passthrough_x, pub_after_passthrough_x, input_msg);
-    ROS_INFO("After Passthough filter X: %ld points", cloud_after_passthrough_x->points.size());
-
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_y = passthroughFilterY(cloud_after_passthrough_x);
-    publishProcessedCloud(cloud_after_passthrough_y, pub_after_passthrough_y, input_msg);
-    ROS_INFO("After Passthough filter Y: %ld points", cloud_after_passthrough_y->points.size());
-
-    // Downsampling
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling = voxelGridDownsampling(cloud_after_passthrough_y, 0.13f, 0.13f, 0.05f);
-    publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
-    ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
-
     auto pre_process_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> pre_process_time = pre_process_end - pre_process_start;
     std::cout << "Time taken for preprocessing (filters to downsampling): " << pre_process_time.count() << " seconds" << std::endl;
     // ------------------------------------------------------------------------------
-
     
     // FEATURE EXTRACTION (NORMAL EXTRACTION)
     // ------------------------------------------------------------------------------
@@ -336,13 +318,6 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     std::cout << "Prediction accuracy for this frame: " << accuracy << std::endl;
     std::cout << "Time taken for prediction: " << prediction_time.count() << " seconds" << std::endl;
     // ------------------------------------------------------------------------------
-
-    // Log the results to CSV
-    logResultsToCSV(csv_file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy);
-
-    // Introducing a delay for analyzing results
-    ROS_INFO("-----------------------------------------------------------------------------------");
-    // ros::Duration(0.5).sleep();
 }
 
 
@@ -356,7 +331,6 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
 
 
 // ROS main function
-// int main(int argc, char** argv) {rslidar_points
 int main(int argc, char** argv) {
 
     // Initialize the ROS node
@@ -366,18 +340,16 @@ int main(int argc, char** argv) {
     // Load the trained SVM model
     std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model";
     loadSVMModel(model_path);
-    ROS_INFO("Model Loaded Sucessfully.");
-
+    
     ROS_INFO("Expected label is: %d", expected_label);
 
     ROS_INFO("Play Plain rosbag if 0 or Grass rosbag if 1.");
 
     // ROS Publishers
-    pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_x", 1);
-    pub_after_passthrough_y = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_y", 1);
-    pub_after_passthrough_z = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_z", 1);
-    pub_after_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/downsampled_cloud", 1);
     
+    pub_after_combined_passthrough = nh.advertise<sensor_msgs::PointCloud2>("/combined_passthrough", 1);
+    pub_after_parallel_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/parallel_downsampled_cloud", 1);
+
     // Subscribing to Lidar Sensor topic
     // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
     // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
