@@ -285,10 +285,10 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // Normal Estimation and Visualization
     auto feature_extraction_start = std::chrono::high_resolution_clock::now();
     
-    int k_neighbors = std::max(10, static_cast<int>(cloud_after_downsampling->points.size() / 5));
+    int k_neighbors = std::max(10, static_cast<int>(cloud_after_parallel_downsampling->points.size() / 5));
     ROS_INFO("Using %d neighbors for normal estimation.", k_neighbors);
 
-    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_downsampling, k_neighbors);
+    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_parallel_downsampling, k_neighbors);
     
     // Debug print given when no normals can be extracted
     if (cloud_normals->points.empty()) {
