@@ -151,7 +151,7 @@ int main() {
     all_data.insert(all_data.end(), grass_10mm.begin(), grass_10mm.end());
 
     // Training percentage
-    double train_percentage = 0.30; // 0.05 = 5% of the data used for training
+    double train_percentage = 0.10; // 0.05 = 5% of the data used for training
 
     // Select a subset of data for training based on the training percentage
     std::vector<FeatureData> train_data = selectTrainingData(all_data, train_percentage);
