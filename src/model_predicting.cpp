@@ -44,8 +44,10 @@
 #include <fstream> // For file operations
 #include <filesystem> // For checking folder existence
 #include <sys/stat.h> // For checking folder existence on some systems
-#include <chrono>
+#include <chrono> // For timestamps
 #include <random>
+#include <iomanip> // For formatting output
+#include <sys/sysinfo.h> // For CPU/GPU utilization
 
 #include <omp.h> // OpenMP for parallel processing
 #include <svm.h> // SVM Model Library: LibSVM
@@ -60,9 +62,12 @@ ros::Publisher pub_after_combined_passthrough;
 ros::Publisher pub_after_parallel_downsampling;
 
 // Path to save the results
-std::string csv_file_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/performance_metrics.csv";
+// Global paths
+std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/";
+std::string file_path = FOLDER_PATH + "performance_metrics.csv";
+std::ofstream file;  // Declare the file variable
 
-int expected_label = 0; // expected_label for grass = 1, plain = 0
+int expected_label = 1; // expected_label for grass = 1, plain = 0
 
 
 // ----------------------------------------------------------------------------------
@@ -217,25 +222,92 @@ double predictTerrainType(const pcl::PointCloud<pcl::Normal>::Ptr& cloud_normals
 
 
 // ----------------------------------------------------------------------------------
-// SAVING TIMING AND ACCURACY VALUES
+// COMPUTING AND SAVING PERFORMANCE METRICS
 // ----------------------------------------------------------------------------------
 
-void logResultsToCSV(const std::string& file_path, double pre_process_time, double feature_extraction_time, double prediction_time, double accuracy) {
-    std::ofstream file;
+// void logResultsToCSV(const std::string& file_path, double pre_process_time, double feature_extraction_time, double prediction_time, double accuracy) {
+//     std::ofstream file;
+
+//     // Open the file in append mode
+//     file.open(file_path, std::ios::app);
+
+//     // Check if the file exists; if not, create it and write the header
+//     if (file.tellp() == 0) {
+//         file << "Preprocessing Time (s),Feature Extraction Time (s),Prediction Time (s),Accuracy\n";
+//     }
+
+//     // Write the data
+//     file << pre_process_time << "," << feature_extraction_time << "," << prediction_time << "," << accuracy << "\n";
+
+//     file.close();
+// }
+
+
+// Structure to store the computed metrics
+struct Metrics {
+    int num_normals;
+    double model_confidence;
+    double precision;
+    double recall;
+    double f1_score;
+};
+
+// Function to compute the required metrics
+Metrics computeMetrics(const pcl::PointCloud<pcl::Normal>::Ptr& cloud_normals, int expected_label) {
+    double total_confidence = 0.0;
+    int total_points = cloud_normals->points.size();
+
+    Metrics metrics;
+    metrics.num_normals = total_points;
+
+    for (int i = 0; i < total_points; ++i) {
+        svm_node nodes[3];
+        nodes[0].index = 1;
+        nodes[0].value = cloud_normals->points[i].normal_x;
+        nodes[1].index = 2;
+        nodes[1].value = cloud_normals->points[i].normal_y;
+        nodes[2].index = -1;
+
+        double decision_values[1];
+        svm_predict_values(model, nodes, decision_values);
+        double confidence = fabs(decision_values[0]); // Using distance from decision boundary as confidence
+
+        total_confidence += confidence;
+    }
+
+    metrics.model_confidence = total_confidence / total_points;
+
+    return metrics;
+}
+
+// Detailed logging
+// Function to log results to CSV, ensuring the file is fresh each time
+void logResultsToCSV(const std::string& file_path, double pre_process_time, double feature_extraction_time, double prediction_time, double accuracy, int num_normals, double model_confidence, double cpu_utilization) {
+
+    // Check if the file exists and is not empty
+    struct stat buffer;
+    bool file_exists = (stat(file_path.c_str(), &buffer) == 0);
 
     // Open the file in append mode
     file.open(file_path, std::ios::app);
 
-    // Check if the file exists; if not, create it and write the header
-    if (file.tellp() == 0) {
-        file << "Preprocessing Time (s),Feature Extraction Time (s),Prediction Time (s),Accuracy\n";
+    // If the file does not exist or is empty, write the header
+    if (!file_exists || buffer.st_size == 0) {
+        file << "Preprocessing Time (s),Feature Extraction Time (s),Prediction Time (s),Accuracy,Num Normals,CPU Utilization (%),Model Confidence\n";
     }
-
     // Write the data
-    file << pre_process_time << "," << feature_extraction_time << "," << prediction_time << "," << accuracy << "\n";
+    file << pre_process_time << "," 
+         << feature_extraction_time << "," 
+         << prediction_time << "," 
+         << accuracy << "," 
+         << num_normals << "," 
+         << cpu_utilization << ","
+         << model_confidence << "\n";
 
     file.close();
 }
+
+
 
 
 
@@ -262,7 +334,7 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     
     pcl::fromROSMsg(*input_msg, *cloud);
-    ROS_INFO("Raw PointCloud: %ld points", cloud->points.size());
+    // ROS_INFO("Raw PointCloud: %ld points", cloud->points.size());
     
     // Combined Passthrough Filtering to reduce function calls
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_combined_passthrough = combinedPassthroughFilter(cloud);
@@ -276,7 +348,7 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     
     auto pre_process_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> pre_process_time = pre_process_end - pre_process_start;
-    std::cout << "Time taken for preprocessing (filters to downsampling): " << pre_process_time.count() << " seconds" << std::endl;
+    // std::cout << "Time taken for preprocessing (filters to downsampling): " << pre_process_time.count() << " seconds" << std::endl;
     // ------------------------------------------------------------------------------
     
     // FEATURE EXTRACTION (NORMAL EXTRACTION)
@@ -286,7 +358,7 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     auto feature_extraction_start = std::chrono::high_resolution_clock::now();
     
     int k_neighbors = std::max(10, static_cast<int>(cloud_after_parallel_downsampling->points.size() / 5));
-    ROS_INFO("Using %d neighbors for normal estimation.", k_neighbors);
+    // ROS_INFO("Using %d neighbors for normal estimation.", k_neighbors);
 
     pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_parallel_downsampling, k_neighbors);
     
@@ -298,7 +370,7 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
 
     auto feature_extraction_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> feature_extraction_time = feature_extraction_end - feature_extraction_start;
-    std::cout << "Time taken for feature extraction: " << feature_extraction_time.count() << " seconds" << std::endl;
+    // std::cout << "Time taken for feature extraction: " << feature_extraction_time.count() << " seconds" << std::endl;
 
     // Normal Visualization
     // visualizeNormals(cloud_after_downsampling, cloud_normals);
@@ -315,9 +387,26 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     auto prediction_end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> prediction_time = prediction_end - prediction_start;
 
-    std::cout << "Prediction accuracy for this frame: " << accuracy << std::endl;
-    std::cout << "Time taken for prediction: " << prediction_time.count() << " seconds" << std::endl;
+    // std::cout << "Prediction accuracy for this frame: " << accuracy << std::endl;
+    // std::cout << "Time taken for prediction: " << prediction_time.count() << " seconds" << std::endl;
     // ------------------------------------------------------------------------------
+
+    // LOGGING PERFORMANCE METRICS
+    // ------------------------------------------------------------------------------
+    // Log the results to CSV
+    // logResultsToCSV(csv_file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy);
+
+    // Compute CPU utilization (you already have the method for this)
+    struct sysinfo sys_info;
+    sysinfo(&sys_info);
+    double cpu_utilization = 100.0 * (sys_info.loads[0] / static_cast<double>(1 << SI_LOAD_SHIFT));
+
+    // Calculate additional metrics (model confidence, precision, recall, F1-score, etc.)
+    Metrics metrics = computeMetrics(cloud_normals, expected_label);
+
+    // Log the results to CSV, including all the new metrics
+    logResultsToCSV(file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy, 
+                    metrics.num_normals, metrics.model_confidence, cpu_utilization);
 }
 
 
@@ -329,13 +418,26 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
 // MAIN FUNCTION
 // ----------------------------------------------------------------------------------
 
-
 // ROS main function
 int main(int argc, char** argv) {
 
     // Initialize the ROS node
     ros::init(argc, argv, "terrain_classification_node");
     ros::NodeHandle nh;
+
+    // Check if the folder exists
+    struct stat info;
+    if (stat(FOLDER_PATH.c_str(), &info) != 0) {
+        ROS_ERROR("The provided folder path does not exist.");
+        return -1;
+    }
+
+    // Check and remove the existing file
+    if (std::remove(file_path.c_str()) == 0) {
+        ROS_INFO("Removed existing file: %s", file_path.c_str());
+    } else {
+        ROS_INFO("No existing file to remove, creating a new file.");
+    }
 
     // Load the trained SVM model
     std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model";
