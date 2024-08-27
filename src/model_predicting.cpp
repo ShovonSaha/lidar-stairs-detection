@@ -63,8 +63,12 @@ ros::Publisher pub_after_parallel_downsampling;
 
 // Path to save the results
 // Global paths
-std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/";
-std::string file_path = FOLDER_PATH + "performance_metrics.csv";
+// std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/"; // Path for Asus Laptop
+// std::string file_path = FOLDER_PATH + "performance_metrics.csv"; // File name for testing model with Asus Laptop
+
+std::string FOLDER_PATH = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification"; // Path for Jetson Nano
+std::string file_path = FOLDER_PATH + "performance_metrics_jetson.csv"; // File name for testing model with Jetson Nano
+
 std::ofstream file;  // Declare the file variable
 
 int expected_label = 1; // expected_label for grass = 1, plain = 0
@@ -440,7 +444,8 @@ int main(int argc, char** argv) {
     }
 
     // Load the trained SVM model
-    std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model";
+    // std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for ASUS Laptop
+    std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for Jetson Nano
     loadSVMModel(model_path);
     
     ROS_INFO("Expected label is: %d", expected_label);
