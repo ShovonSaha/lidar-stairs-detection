@@ -140,9 +140,9 @@ void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, co
 }
 
 
-// ----------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------------------------
 // PREPROCESSING STEPS
-// ----------------------------------------------------------------------------------
+// -------------------------------------------------------------------------------------------------------------------------------------------
 
 // First stage filter
 pcl::PointCloud<pcl::PointXYZI>::Ptr passthroughFilterZ(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
@@ -186,6 +186,29 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr passthroughFilterY(const pcl::PointCloud<pc
 }
 
 
+// Combined Passthrough Filtering to reduce function calls
+pcl::PointCloud<pcl::PointXYZ>::Ptr combinedPassthroughFilter(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
+    pcl::PassThrough<pcl::PointXYZ> pass;
+    pass.setInputCloud(cloud);
+    
+    pass.setFilterFieldName("z");
+    pass.setFilterLimits(-0.7, 0.2);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
+    pass.filter(*cloud_filtered);
+
+    pass.setInputCloud(cloud_filtered);
+    pass.setFilterFieldName("x");
+    pass.setFilterLimits(1.5, 3);
+    pass.filter(*cloud_filtered);
+
+    pass.setInputCloud(cloud_filtered);
+    pass.setFilterFieldName("y");
+    pass.setFilterLimits(-0.6, 0.6);
+    pass.filter(*cloud_filtered);
+
+    return cloud_filtered;
+}
+
 // Voxel Grid Downsampling
 pcl::PointCloud<pcl::PointXYZI>::Ptr voxelGridDownsampling(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, float leaf_size_x, float leaf_size_y, float leaf_size_z) {
     pcl::VoxelGrid<pcl::PointXYZI> voxel_grid;
@@ -198,6 +221,21 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr voxelGridDownsampling(const pcl::PointCloud
     return cloud_downsampled;
 }
 
+// Parallelize Downsampling using OpenMP
+pcl::PointCloud<pcl::PointXYZ>::Ptr parallelVoxelGridDownsampling(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, float leaf_size_x, float leaf_size_y, float leaf_size_z) {
+    pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+    
+    voxel_grid.setInputCloud(cloud);
+    voxel_grid.setLeafSize(leaf_size_x, leaf_size_y, leaf_size_z);
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_downsampled(new pcl::PointCloud<pcl::PointXYZ>);
+    
+    #pragma omp parallel
+    {
+        voxel_grid.filter(*cloud_downsampled);
+    }
+    return cloud_downsampled;
+}
 
 // ----------------------------------------------------------------------------------
 // NORMAL EXTRACTION
