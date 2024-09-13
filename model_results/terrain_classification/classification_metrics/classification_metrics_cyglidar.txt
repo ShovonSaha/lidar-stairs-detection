@@ -1,0 +1,21 @@
+Accuracy: 0.9008915612689198
+F1 Score: 0.9192993563363934
+AUC: 0.9612941148853358
+TPR: 0.9227265987417653
+FPR: 0.133515804933409
+
+Confusion Matrix:
+[[25959  4000]
+ [ 3648 43561]]
+
+Classification Report:
+              precision    recall  f1-score   support
+
+       plain       0.88      0.87      0.87     29959
+       grass       0.92      0.92      0.92     47209
+
+    accuracy                           0.90     77168
+   macro avg       0.90      0.89      0.90     77168
+weighted avg       0.90      0.90      0.90     77168
+
+
