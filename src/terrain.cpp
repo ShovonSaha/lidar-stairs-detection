@@ -61,16 +61,11 @@
 #include <random>
 
 // ROS Publishers
-ros::Publisher pub_after_passthrough_x;
-ros::Publisher pub_after_passthrough_y;
-ros::Publisher pub_after_passthrough_z;
-ros::Publisher pub_after_downsampling;
-// ros::Publisher pub_after_outlier_removal;
-// ros::Publisher pub_after_lowpass;
-ros::Publisher pub_after_downsampling_before_noise;
-ros::Publisher pub_after_adding_noise;
+ros::Publisher pub_after_combined_passthrough;
 
-// ros::Publisher marker_pub;
+ros::Publisher pub_after_downsampling;
+// ros::Publisher pub_after_downsampling_before_noise;
+// ros::Publisher pub_after_adding_noise;
 
 // Base Directory
 // const std::string FOLDER_PATH = "/home/nrelab-titan/Desktop/shovon/data/terrain_analysis"; // Titan PC DIrectory
@@ -80,9 +75,13 @@ ros::Publisher pub_after_adding_noise;
 
 const std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files"; // Asus Laptop DIrectory
 
+// CYGLIDAR: File Path for saving the features
+std::string file_path = FOLDER_PATH + "/cyglidar_plain_terrain_features.csv";
+// std::string file_path = FOLDER_PATH + "/cyglidar_grass_terrain_features.csv";
+
 // File Path for saving the features without noise
 // std::string file_path = FOLDER_PATH + "/plain_terrain_features_no_noise.csv";
-std::string file_path = FOLDER_PATH + "/grass_terrain_features_no_noise.csv";
+// std::string file_path = FOLDER_PATH + "/grass_terrain_features_no_noise.csv";
 
 // std::string file_path = FOLDER_PATH + "/carpet_normals.csv";
 // std::string file_path = FOLDER_PATH + "/plain_normals.csv";
@@ -132,7 +131,7 @@ bool write_header = true;
 // -------------------------------------------------------------------------------------------------------------------------------------------
 
 // Function to publish a point cloud
-void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, const ros::Publisher& publisher, const sensor_msgs::PointCloud2ConstPtr& original_msg) {
+void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const ros::Publisher& publisher, const sensor_msgs::PointCloud2ConstPtr& original_msg) {
     sensor_msgs::PointCloud2 output_msg;
     pcl::toROSMsg(*cloud, output_msg);
     output_msg.header = original_msg->header;
@@ -144,65 +143,26 @@ void publishProcessedCloud(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, co
 // PREPROCESSING STEPS
 // -------------------------------------------------------------------------------------------------------------------------------------------
 
-// First stage filter
-pcl::PointCloud<pcl::PointXYZI>::Ptr passthroughFilterZ(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
-    pcl::PassThrough<pcl::PointXYZI> pass;
-    pass.setInputCloud(cloud);
-    pass.setFilterFieldName("z");
-    pass.setFilterLimits(-0.7, 0.2);
-
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_z(new pcl::PointCloud<pcl::PointXYZI>);
-    pass.filter(*cloud_filtered_z);
-
-    return cloud_filtered_z;
-}
-
-// Second stage filter
-pcl::PointCloud<pcl::PointXYZI>::Ptr passthroughFilterX(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
-    pcl::PassThrough<pcl::PointXYZI> pass;
-    pass.setInputCloud(cloud);
-    pass.setFilterFieldName("x");
-    // pass.setFilterLimits(0, 2); // Parameter for plain terrain
-
-    pass.setFilterLimits(1.5, 3); // Readjusted limit fo grass terrain as there is a concrete floor infront of the lidar before the grass terrain starts
-
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_x(new pcl::PointCloud<pcl::PointXYZI>);
-    pass.filter(*cloud_filtered_x);
-
-    return cloud_filtered_x;
-}
-
-// Third stage filter
-pcl::PointCloud<pcl::PointXYZI>::Ptr passthroughFilterY(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud) {
-    pcl::PassThrough<pcl::PointXYZI> pass;
-    pass.setInputCloud(cloud);
-    pass.setFilterFieldName("y");
-    pass.setFilterLimits(-0.6, 0.6);
-
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered_y(new pcl::PointCloud<pcl::PointXYZI>);
-    pass.filter(*cloud_filtered_y);
-
-    return cloud_filtered_y;
-}
-
-
 // Combined Passthrough Filtering to reduce function calls
 pcl::PointCloud<pcl::PointXYZ>::Ptr combinedPassthroughFilter(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
     pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud);
     
     pass.setFilterFieldName("z");
-    pass.setFilterLimits(-0.7, 0.2);
+    // pass.setFilterLimits(-0.7, 0.2); // Parameters for RoboSense LiDAR
+    pass.setFilterLimits(-0.7, 0.7);
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
     pass.filter(*cloud_filtered);
 
     pass.setInputCloud(cloud_filtered);
     pass.setFilterFieldName("x");
-    pass.setFilterLimits(1.5, 3);
+    // pass.setFilterLimits(1.5, 3); // Parameters for RoboSense LiDAR
+    pass.setFilterLimits(0, 2.2);
     pass.filter(*cloud_filtered);
 
     pass.setInputCloud(cloud_filtered);
     pass.setFilterFieldName("y");
+    // pass.setFilterLimits(-0.6, 0.6); // Parameters for RoboSense LiDAR
     pass.setFilterLimits(-0.6, 0.6);
     pass.filter(*cloud_filtered);
 
@@ -210,12 +170,12 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr combinedPassthroughFilter(const pcl::PointCl
 }
 
 // Voxel Grid Downsampling
-pcl::PointCloud<pcl::PointXYZI>::Ptr voxelGridDownsampling(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, float leaf_size_x, float leaf_size_y, float leaf_size_z) {
-    pcl::VoxelGrid<pcl::PointXYZI> voxel_grid;
+pcl::PointCloud<pcl::PointXYZ>::Ptr voxelGridDownsampling(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, float leaf_size_x, float leaf_size_y, float leaf_size_z) {
+    pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
     voxel_grid.setInputCloud(cloud);
     voxel_grid.setLeafSize(leaf_size_x, leaf_size_y, leaf_size_z);
 
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_downsampled(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_downsampled(new pcl::PointCloud<pcl::PointXYZ>);
     voxel_grid.filter(*cloud_downsampled);
 
     return cloud_downsampled;
@@ -242,11 +202,11 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr parallelVoxelGridDownsampling(const pcl::Poi
 // ----------------------------------------------------------------------------------
 
 // Compute Normals
-pcl::PointCloud<pcl::Normal>::Ptr computeNormals(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, int k_numbers) {
-    pcl::NormalEstimation<pcl::PointXYZI, pcl::Normal> ne;
+pcl::PointCloud<pcl::Normal>::Ptr computeNormals(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, int k_numbers) {
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
     ne.setInputCloud(cloud);
 
-    pcl::search::KdTree<pcl::PointXYZI>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZI>);
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
     ne.setSearchMethod(tree);
 
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
@@ -267,13 +227,13 @@ pcl::PointCloud<pcl::Normal>::Ptr computeNormals(const pcl::PointCloud<pcl::Poin
 }
 
 // Normal Visualization
-void visualizeNormals(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, const pcl::PointCloud<pcl::Normal>::Ptr& normals) {
+void visualizeNormals(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PointCloud<pcl::Normal>::Ptr& normals) {
     pcl::visualization::PCLVisualizer viewer("Normals Visualization");
     viewer.setBackgroundColor(0.05, 0.05, 0.05, 0); // Dark background for better visibility
-    viewer.addPointCloud<pcl::PointXYZI>(cloud, "cloud");
+    viewer.addPointCloud<pcl::PointXYZ>(cloud, "cloud");
 
     // Add normals to the viewer with a specific scale factor for better visibility
-    viewer.addPointCloudNormals<pcl::PointXYZI, pcl::Normal>(cloud, normals, 10, 0.05, "normals");
+    viewer.addPointCloudNormals<pcl::PointXYZ, pcl::Normal>(cloud, normals, 10, 0.05, "normals");
 
     while (!viewer.wasStopped()) {
         viewer.spinOnce();
@@ -285,19 +245,19 @@ void visualizeNormals(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, const p
 // ----------------------------------------------------------------------------------
 
 // Function to add Gaussian noise to a point cloud
-pcl::PointCloud<pcl::PointXYZI>::Ptr addGaussianNoise(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, float stddev) {
-    pcl::PointCloud<pcl::PointXYZI>::Ptr noisy_cloud(new pcl::PointCloud<pcl::PointXYZI>(*cloud));
-    std::default_random_engine generator;
-    std::normal_distribution<float> distribution(0.0, stddev);
+// pcl::PointCloud<pcl::PointXYZ>::Ptr addGaussianNoise(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, float stddev) {
+//     pcl::PointCloud<pcl::PointXYZ>::Ptr noisy_cloud(new pcl::PointCloud<pcl::PointXYZ>(*cloud));
+//     std::default_random_engine generator;
+//     std::normal_distribution<float> distribution(0.0, stddev);
 
-    for (auto& point : noisy_cloud->points) {
-        point.x += distribution(generator);
-        point.y += 2*distribution(generator);
-        point.z += distribution(generator);
-    }
+//     for (auto& point : noisy_cloud->points) {
+//         point.x += distribution(generator);
+//         point.y += 2*distribution(generator);
+//         point.z += distribution(generator);
+//     }
 
-    return noisy_cloud;
-}
+//     return noisy_cloud;
+// }
 
 
 // ----------------------------------------------------------------------------------
@@ -305,12 +265,12 @@ pcl::PointCloud<pcl::PointXYZI>::Ptr addGaussianNoise(const pcl::PointCloud<pcl:
 // ----------------------------------------------------------------------------------
 
 // Save Features to CSV
-void saveFeaturesToCSV(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, const pcl::PointCloud<pcl::Normal>::Ptr& normals, const std::string& file_path) {
+void saveFeaturesToCSV(const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PointCloud<pcl::Normal>::Ptr& normals, const std::string& file_path) {
     std::ofstream file(file_path, std::ios_base::app);
 
     if (file.is_open()) {
         if (write_header) {
-            file << "X,Y,Z,NormalX,NormalY,NormalZ,Intensity\n";
+            file << "X,Y,Z,NormalX,NormalY,NormalZ\n";
             write_header = false;
         }
 
@@ -320,8 +280,8 @@ void saveFeaturesToCSV(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, const 
                  << cloud->points[i].z << ","
                  << normals->points[i].normal_x << ","
                  << normals->points[i].normal_y << ","
-                 << normals->points[i].normal_z << ","
-                 << cloud->points[i].intensity << "\n";
+                 << normals->points[i].normal_z << "\n";
+                //  << cloud->points[i].intensity << "\n";
         }
 
         file.close();
@@ -352,20 +312,23 @@ void saveFeaturesToCSV(const pcl::PointCloud<pcl::PointXYZI>::Ptr& cloud, const 
 void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros::NodeHandle& nh)
 {
     // Convert ROS PointCloud2 message to PCL PointCloud
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::fromROSMsg(*input_msg, *cloud);
     ROS_INFO("Raw PointCloud: %ld points", cloud->points.size());
 
+
+    // NOISE ADDITION FOR SIMULATING LOWER ACCURACY LIDAR >>> ONLY DONE TO ROBOSENSE LIDAR
+    // -----------------------------------------------------------------------------------------------
     // // Downsampling to increase the line separation in lidar
-    // pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling_before_noise = voxelGridDownsampling(cloud, 0.05f, 0.05f, 0.05f);
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_downsampling_before_noise = voxelGridDownsampling(cloud, 0.05f, 0.05f, 0.05f);
     // publishProcessedCloud(cloud_after_downsampling_before_noise, pub_after_downsampling_before_noise, input_msg);
     // ROS_INFO("After Downsampling before adding noise: %ld points", cloud_after_downsampling_before_noise->points.size());
 
     // // Add Gaussian noise to the cloud
-    // pcl::PointCloud<pcl::PointXYZI>::Ptr noisy_cloud = addGaussianNoise(cloud_after_downsampling_before_noise, noise_stddev);
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr noisy_cloud = addGaussianNoise(cloud_after_downsampling_before_noise, noise_stddev);
     // publishProcessedCloud(noisy_cloud, pub_after_adding_noise, input_msg);
     // ROS_INFO("Noisy PointCloud: %ld points with %.3f noise stddev", noisy_cloud->points.size(), noise_stddev);
-
+    // -----------------------------------------------------------------------------------------------
 
     // // FOR SAVING NOISY POINTCLOUD TO ROSBAG: Convert the noisy cloud back to ROS message and write to bag
     // sensor_msgs::PointCloud2 noisy_cloud_msg;
@@ -373,24 +336,16 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // noisy_cloud_msg.header = input_msg->header;
     // bag.write("/noisy_cloud", ros::Time::now(), noisy_cloud_msg);
     // ROS_INFO("Noisy cloud added to rosbag");
-
-    // Passthrough Filtering
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_z = passthroughFilterZ(cloud);
-    // pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_z = passthroughFilterZ(noisy_cloud); // Noisy Cloud as input
-    publishProcessedCloud(cloud_after_passthrough_z, pub_after_passthrough_z, input_msg);
-    ROS_INFO("After Passthough filter Z: %ld points", cloud_after_passthrough_z->points.size());
     
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_x = passthroughFilterX(cloud_after_passthrough_z);
-    publishProcessedCloud(cloud_after_passthrough_x, pub_after_passthrough_x, input_msg);
-    ROS_INFO("After Passthough filter X: %ld points", cloud_after_passthrough_x->points.size());
-
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_passthrough_y = passthroughFilterY(cloud_after_passthrough_x);
-    publishProcessedCloud(cloud_after_passthrough_y, pub_after_passthrough_y, input_msg);
-    ROS_INFO("After Passthough filter Y: %ld points", cloud_after_passthrough_y->points.size());
-
+    // Combined Passthrough Filtering to reduce function calls    
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_combined_passthrough = combinedPassthroughFilter(cloud);
+    publishProcessedCloud(cloud_after_combined_passthrough, pub_after_combined_passthrough, input_msg);
+    ROS_INFO("After Combined Passthough filter: %ld points", cloud_after_combined_passthrough->points.size());
+    
     // Downsampling
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_after_downsampling = voxelGridDownsampling(cloud_after_passthrough_y, 0.13f, 0.13f, 0.05f);
-    publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_downsampling = voxelGridDownsampling(cloud_after_passthrough_y, 0.13f, 0.13f, 0.05f);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_downsampling = voxelGridDownsampling(cloud_after_combined_passthrough, 0.05f, 0.05f, 0.05f);
+        publishProcessedCloud(cloud_after_downsampling, pub_after_downsampling, input_msg);
     ROS_INFO("After Downsampling: %ld points", cloud_after_downsampling->points.size());
 
     // Normal Estimation and Visualization
@@ -435,6 +390,7 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    // Check if the previous features file is there and remove if found
     if (std::remove(file_path.c_str()) == 0) {
         ROS_INFO("Removed existing file: %s", file_path.c_str());
     }
@@ -452,14 +408,13 @@ int main(int argc, char** argv) {
     // pub_after_adding_noise = nh.advertise<sensor_msgs::PointCloud2>("/noisy_cloud", 1);
 
     // Pre-processing steps
-    pub_after_passthrough_x = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_x", 1);
-    pub_after_passthrough_y = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_y", 1);
-    pub_after_passthrough_z = nh.advertise<sensor_msgs::PointCloud2>("/passthrough_z", 1);
+    pub_after_combined_passthrough = nh.advertise<sensor_msgs::PointCloud2>("/combined_passthrough", 1);
+    
     pub_after_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/downsampled_cloud", 1);
     
-    // Subscribing to Lidar Sensor topic
-    // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
-    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
+    // Subscribing to LiDAR Sensor topic >> CygLidar or RoboSense 
+    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
+    // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
     
     ros::spin();
 

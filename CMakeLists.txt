@@ -307,15 +307,15 @@ target_link_libraries(terrain
 target_link_libraries(model_training
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
-  # /home/shovon/Downloads/libsvm-3.34/svm.cpp  # SVM library: Use absolute path
-  /home/jetson/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for Jetson Nano
+  /home/shovon/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for ASUS Laptop
+  # /home/jetson/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for Jetson Nano
 )
 
 target_link_libraries(model_predicting
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
-  # /home/shovon/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for ASUS Laptop
-  /home/jetson/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for Jetson Nano
+  /home/shovon/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for ASUS Laptop
+  # /home/jetson/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for Jetson Nano
 )
 
 
