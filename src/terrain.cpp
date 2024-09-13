@@ -76,8 +76,8 @@ ros::Publisher pub_after_downsampling;
 const std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/features_csv_files"; // Asus Laptop DIrectory
 
 // CYGLIDAR: File Path for saving the features
-std::string file_path = FOLDER_PATH + "/cyglidar_plain_terrain_features.csv";
-// std::string file_path = FOLDER_PATH + "/cyglidar_grass_terrain_features.csv";
+// std::string file_path = FOLDER_PATH + "/cyglidar_plain_terrain_features.csv";
+std::string file_path = FOLDER_PATH + "/cyglidar_grass_terrain_features.csv";
 
 // File Path for saving the features without noise
 // std::string file_path = FOLDER_PATH + "/plain_terrain_features_no_noise.csv";
