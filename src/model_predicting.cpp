@@ -63,11 +63,12 @@ ros::Publisher pub_after_parallel_downsampling;
 
 // Path to save the results
 // Global paths
-// std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/"; // Path for Asus Laptop
+std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/"; // Path for Asus Laptop
 // std::string file_path = FOLDER_PATH + "performance_metrics.csv"; // File name for testing model with Asus Laptop
+std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar.csv"; // File name for testing model with Asus Laptop
 
-std::string FOLDER_PATH = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification"; // Path for Jetson Nano
-std::string file_path = FOLDER_PATH + "performance_metrics_jetson.csv"; // File name for testing model with Jetson Nano
+// std::string FOLDER_PATH = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification"; // Path for Jetson Nano
+// std::string file_path = FOLDER_PATH + "performance_metrics_jetson.csv"; // File name for testing model with Jetson Nano
 
 std::ofstream file;  // Declare the file variable
 
@@ -387,29 +388,29 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // ROS_INFO("After Combined Passthough filter: %ld points", cloud_after_combined_passthrough->points.size());
     
     // ------------------------------------------------------------------------------
-    // Normal Voxel Grid Downsampling
-    auto normal_downsampling_start = std::chrono::high_resolution_clock::now();
+    // // Normal Voxel Grid Downsampling
+    // auto normal_downsampling_start = std::chrono::high_resolution_clock::now();
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_normal_downsampling = voxelGridDownsampling(cloud_after_combined_passthrough, 0.13f, 0.13f, 0.05f);
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_normal_downsampling = voxelGridDownsampling(cloud_after_combined_passthrough, 0.13f, 0.13f, 0.05f);
 
-    auto normal_downsampling_end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> normal_downsampling_time = normal_downsampling_end - normal_downsampling_start;
-    ROS_INFO("Normal Downsampling Time: %f seconds", normal_downsampling_time.count());
+    // auto normal_downsampling_end = std::chrono::high_resolution_clock::now();
+    // std::chrono::duration<double> normal_downsampling_time = normal_downsampling_end - normal_downsampling_start;
+    // ROS_INFO("Normal Downsampling Time: %f seconds", normal_downsampling_time.count());
     // ------------------------------------------------------------------------------
 
     // Parallel Voxel Grid Downsampling
-    auto parallel_downsampling_start = std::chrono::high_resolution_clock::now();
+    // auto parallel_downsampling_start = std::chrono::high_resolution_clock::now();
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_after_parallel_downsampling = parallelVoxelGridDownsampling(cloud_after_combined_passthrough, 0.13f, 0.13f, 0.05f);
     // publishProcessedCloud(cloud_after_parallel_downsampling, pub_after_parallel_downsampling, input_msg);
     // ROS_INFO("After Parallel Downsampling: %ld points", cloud_after_parallel_downsampling->points.size());
     
-    auto parallel_downsampling_end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> parallel_downsampling_time = parallel_downsampling_end - parallel_downsampling_start;
-    ROS_INFO("Parallel Downsampling Time: %f seconds", parallel_downsampling_time.count());
+    // auto parallel_downsampling_end = std::chrono::high_resolution_clock::now();
+    // std::chrono::duration<double> parallel_downsampling_time = parallel_downsampling_end - parallel_downsampling_start;
+    // ROS_INFO("Parallel Downsampling Time: %f seconds", parallel_downsampling_time.count());
 
-    double speedup_dw = normal_downsampling_time.count() / parallel_downsampling_time.count();
-    ROS_INFO("Speedup with Parallel Downsampling: %f", speedup_dw);
+    // double speedup_dw = normal_downsampling_time.count() / parallel_downsampling_time.count();
+    // ROS_INFO("Speedup with Parallel Downsampling: %f", speedup_dw);
 
     // End of Pre-processing steps. Calculate time required for this segment
     auto pre_process_end = std::chrono::high_resolution_clock::now();
@@ -421,10 +422,10 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // ------------------------------------------------------------------------------
     
     // // Normal Estimation and Visualization
-    // auto feature_extraction_start = std::chrono::high_resolution_clock::now();
+    auto feature_extraction_start = std::chrono::high_resolution_clock::now();
     
-    // int k_neighbors = std::max(10, static_cast<int>(cloud_after_parallel_downsampling->points.size() / 5));
-    // // ROS_INFO("Using %d neighbors for normal estimation.", k_neighbors);
+    int k_neighbors = std::max(10, static_cast<int>(cloud_after_parallel_downsampling->points.size() / 5));
+    // ROS_INFO("Using %d neighbors for normal estimation.", k_neighbors);
 
     // pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_parallel_downsampling, k_neighbors);
     
@@ -441,77 +442,81 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // ------------------------------------------------------------------------------
 
     // ------------------------------------------------------------------------------
-    // Sequential Normal Computation
-    auto sequential_start = std::chrono::high_resolution_clock::now();
-    // pcl::PointCloud<pcl::Normal>::Ptr normals_sequential = computeNormals(cloud, 50);
+    // // Sequential Normal Computation
+    // auto sequential_start = std::chrono::high_resolution_clock::now();
+    // // pcl::PointCloud<pcl::Normal>::Ptr normals_sequential = computeNormals(cloud, 50);
 
-    int k_neighbors = std::max(10, static_cast<int>(cloud_after_parallel_downsampling->points.size() / 5));
-    // ROS_INFO("Using %d neighbors for normal estimation.", k_neighbors);
+    // int k_neighbors = std::max(10, static_cast<int>(cloud_after_parallel_downsampling->points.size() / 5));
+    // // ROS_INFO("Using %d neighbors for normal estimation.", k_neighbors);
 
-    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_parallel_downsampling, k_neighbors);
+    // pcl::PointCloud<pcl::Normal>::Ptr cloud_normals = computeNormals(cloud_after_parallel_downsampling, k_neighbors);
     
-    // Debug print given when no normals can be extracted
-    if (cloud_normals->points.empty()) {
-        ROS_ERROR("Normal estimation failed.");
-        return;
-    }
+    // // Debug print given when no normals can be extracted
+    // if (cloud_normals->points.empty()) {
+    //     ROS_ERROR("Normal estimation failed.");
+    //     return;
+    // }
 
-    auto sequential_end = std::chrono::high_resolution_clock::now();
+    // auto sequential_end = std::chrono::high_resolution_clock::now();
 
-    std::chrono::duration<double> sequential_time = sequential_end - sequential_start;
-    ROS_INFO("Sequential Normal Computation Time: %f seconds", sequential_time.count());
+    // std::chrono::duration<double> sequential_time = sequential_end - sequential_start;
+    // ROS_INFO("Sequential Normal Computation Time: %f seconds", sequential_time.count());
     // ------------------------------------------------------------------------------
 
     // ------------------------------------------------------------------------------
     // Parallel Normal Computation
-    auto parallel_start = std::chrono::high_resolution_clock::now();
+    // auto parallel_start = std::chrono::high_resolution_clock::now();
 
     pcl::PointCloud<pcl::Normal>::Ptr normals_parallel = computeNormalsParallel(cloud_after_parallel_downsampling, k_neighbors);
 
-    auto parallel_end = std::chrono::high_resolution_clock::now();
+    // auto parallel_end = std::chrono::high_resolution_clock::now();
 
-    std::chrono::duration<double> parallel_time = parallel_end - parallel_start;
-    ROS_INFO("Parallel Normal Computation Time: %f seconds", parallel_time.count());
+    // std::chrono::duration<double> parallel_time = parallel_end - parallel_start;
+    // ROS_INFO("Parallel Normal Computation Time: %f seconds", parallel_time.count());
 
-    double speedup = sequential_time.count() / parallel_time.count();
-    ROS_INFO("Speedup with Parallel Normal Computation: %f", speedup);
+    // double speedup = sequential_time.count() / parallel_time.count();
+    // ROS_INFO("Speedup with Parallel Normal Computation: %f", speedup);
     
+    auto feature_extraction_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> feature_extraction_time = feature_extraction_end - feature_extraction_start;
+    // std::cout << "Time taken for feature extraction: " << feature_extraction_time.count() << " seconds" << std::endl;
+
 
     // Normal Visualization
     // visualizeNormals(cloud_after_downsampling, cloud_normals);
     // ------------------------------------------------------------------------------
     // ------------------------------------------------------------------------------
 
-    // // PREDICTION 
-    // // ------------------------------------------------------------------------------
-    // auto prediction_start = std::chrono::high_resolution_clock::now();
+    // PREDICTION 
+    // ------------------------------------------------------------------------------
+    auto prediction_start = std::chrono::high_resolution_clock::now();
 
-    // // Predict the terrain type using the saved SVM model.
-    // double accuracy = predictTerrainType(cloud_normals, expected_label); 
+    // Predict the terrain type using the saved SVM model.
+    double accuracy = predictTerrainType(normals_parallel, expected_label); 
 
-    // auto prediction_end = std::chrono::high_resolution_clock::now();
-    // std::chrono::duration<double> prediction_time = prediction_end - prediction_start;
+    auto prediction_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> prediction_time = prediction_end - prediction_start;
 
-    // // std::cout << "Prediction accuracy for this frame: " << accuracy << std::endl;
-    // // std::cout << "Time taken for prediction: " << prediction_time.count() << " seconds" << std::endl;
-    // // ------------------------------------------------------------------------------
+    std::cout << "Prediction accuracy for this frame: " << accuracy << std::endl;
+    std::cout << "Time taken for prediction: " << prediction_time.count() << " seconds" << std::endl;
+    // ------------------------------------------------------------------------------
 
-    // // LOGGING PERFORMANCE METRICS
-    // // ------------------------------------------------------------------------------
-    // // Log the results to CSV
-    // // logResultsToCSV(csv_file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy);
+    // LOGGING PERFORMANCE METRICS
+    // ------------------------------------------------------------------------------
+    // Log the results to CSV
+    // logResultsToCSV(csv_file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy);
 
-    // // Compute CPU utilization (you already have the method for this)
-    // struct sysinfo sys_info;
-    // sysinfo(&sys_info);
-    // double cpu_utilization = 100.0 * (sys_info.loads[0] / static_cast<double>(1 << SI_LOAD_SHIFT));
+    // Compute CPU utilization (you already have the method for this)
+    struct sysinfo sys_info;
+    sysinfo(&sys_info);
+    double cpu_utilization = 100.0 * (sys_info.loads[0] / static_cast<double>(1 << SI_LOAD_SHIFT));
 
-    // // Calculate additional metrics (model confidence, precision, recall, F1-score, etc.)
-    // Metrics metrics = computeMetrics(cloud_normals, expected_label);
+    // Calculate additional metrics (model confidence, precision, recall, F1-score, etc.)
+    Metrics metrics = computeMetrics(normals_parallel, expected_label);
 
-    // // Log the results to CSV, including all the new metrics
-    // logResultsToCSV(file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy, 
-    //                 metrics.num_normals, metrics.model_confidence, cpu_utilization);
+    // Log the results to CSV, including all the new metrics
+    logResultsToCSV(file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy, 
+                    metrics.num_normals, metrics.model_confidence, cpu_utilization);
 }
 
 
@@ -544,9 +549,12 @@ int main(int argc, char** argv) {
         ROS_INFO("No existing file to remove, creating a new file.");
     }
 
-    // Load the trained SVM model
+    // Load the trained SVM 
     // std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for ASUS Laptop
-    std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for Jetson Nano
+    std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model.model"; // Model Path for ASUS Laptop
+
+    // std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for Jetson Nano
+    
     loadSVMModel(model_path);
     
     ROS_INFO("Expected label is: %d", expected_label);
@@ -559,11 +567,11 @@ int main(int argc, char** argv) {
     pub_after_parallel_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/parallel_downsampled_cloud", 1);
 
     // Subscribing to Lidar Sensor topic
-    // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
+    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
     // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
 
     // Subscribing to Lidar Sensor topic for Noisy PointCloud
-    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/noisy_cloud", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
+    // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/noisy_cloud", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
     
     ros::spin();
 
