@@ -291,7 +291,7 @@ int main() {
 
 
     // Specify the training percentage
-    double train_percentage = 0.1;  // Example: 80% of the data for training, 20% for final validation
+    double train_percentage = 0.9;  // Example: 80% of the data for training, 20% for final validation
 
     // Split data into training and validation sets
     auto [train_data, validation_data] = splitData(all_data, train_percentage);
