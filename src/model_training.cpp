@@ -85,16 +85,29 @@ std::vector<FeatureData> loadCSV(const std::string& filename, int label) {
 void trainAndSaveSVMModelKFold(const std::vector<FeatureData>& data, int k_folds, double train_percentage, const std::string& save_directory) {
     std::cout << "Starting SVM training with " << data.size() << " samples using " << k_folds << "-fold cross-validation." << std::endl;
 
-    // Initialize SVM parameters
+    // // Initialize SVM parameters for Linear Kernel
+    // svm_parameter param;
+    // param.svm_type = C_SVC;
+    // param.kernel_type = LINEAR;  // Changed from RBF to LINEAR
+    // param.C = 100;
+    // param.cache_size = 100;
+    // param.eps = 1e-3;
+    // param.nr_weight = 0;
+    // param.shrinking = 1;
+    // param.probability = 0;
+
+    // Initialize SVM parameters for RBF kernel
     svm_parameter param;
     param.svm_type = C_SVC;
-    param.kernel_type = LINEAR;  // Changed from RBF to LINEAR
+    param.kernel_type = RBF;  // Use RBF kernel instead of LINEAR
     param.C = 100;
+    param.gamma = 0.1;  // Define the gamma parameter for RBF kernel
     param.cache_size = 100;
     param.eps = 1e-3;
     param.nr_weight = 0;
     param.shrinking = 1;
     param.probability = 0;
+
 
     // Separate the data by class
     std::vector<FeatureData> plain_data;
@@ -291,7 +304,7 @@ int main() {
 
 
     // Specify the training percentage
-    double train_percentage = 0.9;  // Example: 80% of the data for training, 20% for final validation
+    double train_percentage = 0.99;  // Example: 80% of the data for training, 20% for final validation
 
     // Split data into training and validation sets
     auto [train_data, validation_data] = splitData(all_data, train_percentage);
