@@ -1,0 +1,79 @@
+[33m91b044a[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m)[m Merge branch 'main' of https://github.com/ShovonSaha/stat_analysis into main
+[33m91fb7b0[m Trained the model with 90% data and tested model on Asus.
+[33m67f122a[m[33m ([m[1;31morigin/main[m[33m)[m Tested Cyglidar Terrain model on Jetson Nano. Saved the performance metrics for further evaluation.
+[33m90872db[m  Updated model_training and model_predicting codes for running on Asus Laptop. Trained on 10% of the testing data. Got average of 62% accuracy on testing data. Detailed performance metrics saved.
+[33m7d3b72e[m Added new cyglidar features files with cropped training rosbags.
+[33m0ede9d9[m Added rosbag processing codes. Added Cyglidar training and testing rosbags.
+[33mc03f5ba[m Saved cyglidar terrain features. Saved the accuracy metrics for training/testing on the 10% of the data. Modified Terrrain Classification Python Notebook code for testing the model.
+[33m4cf2286[m Modified Terrain.cpp (Features saving code). Added combined passthrough filter and removed other redundant codes. Will save the features from Cyglidar terrains.
+[33m66847c7[m Merge branch 'main' of github.com:ShovonSaha/stat_analysis into main
+[33mc4e19d2[m Checking OpenMP computation efficiencies for both downsampling and normal extraction.
+[33m00c9d78[m Tested model performance on Jetson Nano. Saved the metrics csv file.
+[33m68ef4c3[m Committing from Jetson Nano.
+[33m4fc9f19[m Modified model_predicting.cpp in implementing parallel programming and storing performance metrices csv files.
+[33ma07eaa4[m Fixed the name of the downsampled cloud called in computeNormals().
+[33m49035fd[m Commented out publishing the pre-processed clouds and reporting of the no. of points after each of the steps.
+[33m9f8799e[m Combined passthrough filtering and parallelized downsampling for faster processing. Tested the model with Noisy Plain 10 mm rosbag.
+[33m0450d8b[m Performance metrics after running plain_noisy_10_mm.bag.
+[33m4d8cc5d[m Removed redundant changes from the remote repo.
+[33m00fc63a[m Merge branch 'main' of github.com:ShovonSaha/stat_analysis into main
+[33m34ff9ef[m Moved the noisy rosbags to a different directory. Modified the model training, changing to a Linear SVM Model.
+[33m13c46a2[m New features csv files with cropped plain terrain data. Previous plain terrain data had a person opening the NODE Lab door in the last couple of seconds. This new rosbag has been cropped to 90 seconds and has been pushed to the repo in the previous commit.
+[33m53112aa[m Restored grass terrain CSV files
+[33m6c0ff08[m Model prediction performance metrics csv file saved.
+[33m14f1ad8[m Added parallel programming and time checkpoints for preprocessing, feature extraction and prediction in the model_predicting code. Also saved the model trained on 30% of combined data (including data from all noise levels).
+[33m83aa7c1[m Committing local terrain_class python code for generating graphs and detailed reports, helpful for thesis
+[33m55d2ed9[m Integrated SVM training using LibSVM in C++ for checking real-time performances. Verifying the C++ codes first on Asus Laptop before deploying it on NVIDIA Jetson Nano.
+[33m81baf93[m Reduced redundant codes - save directory.
+[33ma6cae77[m Added classification plots and reports for each of the noise levels. Saved the plots in both png and svg.
+[33mae8db66[m minor changes
+[33m5ff44ea[m Added Titan PC directory for noisy_csv_files.
+[33m1eee455[m Adding Asus laptop csv file directory.
+[33m7b13cc3[m Modified terrain.cpp for adding noise of 4,6,8,10 mm.
+[33me652f92[m August 14th commit
+[33mc585234[m Terrain Classification: ML Model based on Normals extracted from Noisy Point Cloud
+[33mbc53c3e[m Terrain Classification based on Normals X and Y. Using optimized SVM RBF Kernel for the model.
+[33md2d39d4[m deleted redundant codes and rearranged python codes.
+[33mcfac79f[m Terrain Classification: Trained linear SVM model with Normal X and Normal Y only - Not Intensity.
+[33me73ce74[m Changed the step number in the last cell of the ipynb file.
+[33mfcc6fc0[m Removed redundant files from local repo.
+[33m61ac091[m Misclassification plot saved.
+[33m777b96c[m Inspecting false positives and false negatives.
+[33m9580caf[m Thesis - PCA and ML-based stairs detection with Cyglidar confirmed. Features added: Training with Linear SVM kernel, Hyperparameter tuning and training with the best non-linear kernel for maximum accuracy, Saved tuning results in a CSV file, Optimized code for acceleration with multiple CPU.
+[33m81e0c9e[m Terrain classification feature analysis confirmed. Graphs generated using the notebook python environment.
+[33maa7c848[m Updated stair detection. Feature included: MLS integration, parameterizing functions more.
+[33m9e54027[m Tuned the downsampling parameters and removed MLS (order = 1). MLS might be more useful in stair detection.
+[33mfadff55[m Updated hardware accelerated codes. Tuning preprocessing steps for the terrain.cpp code. Playing with the MLS filter and analyzing normals. Might need to use pass-through x-y filer.
+[33mc8e632b[m Updated directory.
+[33me591d64[m Hardware accelerated code.
+[33mbab941a[m Updated terrain classification ML code.
+[33m2934b5a[m Updated terrain classification ML code.
+[33m6438f03[m Analyzing PCA plots and training SVM classifier with Poly kernel.
+[33m82402bc[m Updated plane_prob code for plane seg with RoboSense data. Updating terrain classification code with PCA for downsampled normals on grass and plain terrains.
+[33m13fa670[m Normals extracted from the collected data.
+[33m697d4d2[m Added a few debug prints to the classifier code.
+[33md1e1ab2[m Extracting and saving normals from the two terrains. Running PCA and training a SVM classifier.
+[33mead24d7[m PCA on Extracted Normals
+[33m2af7ba8[m Visualizing normals for terrain classification.
+[33mccd7f17[m Modified robosense.cpp to extract planes.
+[33me7e0860[m Plane marker visualization is working.
+[33m70394e3[m Plane marker visualization is working.
+[33mc1f3f3b[m Trimmed the code, removed unwanted and repititive functions. Working on Marker/Plane visualization for each of the planes.
+[33m839da1c[m Plane extraction with plane equations. Trying to make the plane visualization on RViz work. Need to refer to the prior working code.
+[33md295457[m Finalized the plane segmentation part of the code. Now it is detecting multiple planes (2) for now. Visualization of the found planes through the marker is under development.
+[33mff8be97[m Feature added: Iterative PCL RANSAC Plane segmentation for each of the clusters. Printing info on number of planes found, no. points in each plane for each of the clusters. Also initialized a structure for storing the plane points for each of the clusters (both for original and downsampled clusters.
+[33mb7a1bd7[m Code added: Euclidean clustering and downsampling each clusters' function. Feature added: Parameterized the downsampling leaf size initialization and used stairway building code dimensions for setting the value of the leaf size y or width of the stairs.
+[33md9ca063[m added comments in dwsampling and euc clustering.
+[33mb5c9848[m Downsampling leaf size changes and euc clustering changes.
+[33m5705804[m Euclidean Clustering with and without downsampling sequentially.
+[33m56f2b7e[m Added DBSCAN and finalizing on Euclidean Clustering process
+[33mf04fb87[m Resolved merge conflicts.
+[33mc6a82b9[m Re-structured repo and deleted redundant files.
+[33md3f7138[m Add files via upload
+[33mcc915bf[m Add files via upload
+[33m61240a4[m Add files via upload
+[33m6838a56[m Add files via upload
+[33m11b5de8[m Modified plane_prob_1.cpp and integrated latest stairs detection algorithm. Algorithm has also been updated in the technical documentation google doc.
+[33mcdbaa7e[m Modified plane_prob_1.cpp and integrated latest stairs detection algorithm. Algorithm has also been updated in the technical documentation google doc.
+[33mcf46475[m 4 - plane segmentation algorithm
+[33m4333f25[m first commit
