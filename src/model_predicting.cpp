@@ -67,8 +67,8 @@ ros::Publisher pub_after_parallel_downsampling;
 // std::string file_path = FOLDER_PATH + "performance_metrics.csv"; // File name for testing model with Asus Laptop
 // std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar.csv"; // File name for testing model with Asus Laptop
 
-std::string FOLDER_PATH = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification"; // Path for Jetson Nano
-std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_jetson.csv"; // File name for saving performance metrics while testing model with Jetson Nano
+std::string FOLDER_PATH = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/"; // Path for Jetson Nano
+std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_jetson_svm_rbf.csv"; // File name for saving performance metrics while testing model with Jetson Nano
 
 std::ofstream file;  // Declare the file variable
 
@@ -555,7 +555,8 @@ int main(int argc, char** argv) {
     // std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_90.model"; // Model Path for ASUS Laptop
 
     // std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for Jetson Nano
-    std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_90.model"; // Model Path for Jetson Nano
+    // std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_90.model"; // Model Path for Jetson Nano
+    std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_svm_rbf.model"; // Model Path for Jetson Nano
     
     loadSVMModel(model_path);
     
