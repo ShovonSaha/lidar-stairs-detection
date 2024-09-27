@@ -63,12 +63,12 @@ ros::Publisher pub_after_parallel_downsampling;
 
 // Path to save the results
 // Global paths
-// std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/"; // Path for Asus Laptop
+std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/"; // Path for Asus Laptop
 // std::string file_path = FOLDER_PATH + "performance_metrics.csv"; // File name for testing model with Asus Laptop
-// std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar.csv"; // File name for testing model with Asus Laptop
+std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_rbf.csv"; // File name for testing model with Asus Laptop
 
-std::string FOLDER_PATH = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification"; // Path for Jetson Nano
-std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_jetson.csv"; // File name for saving performance metrics while testing model with Jetson Nano
+// std::string FOLDER_PATH = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification"; // Path for Jetson Nano
+// std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_jetson.csv"; // File name for saving performance metrics while testing model with Jetson Nano
 
 std::ofstream file;  // Declare the file variable
 
@@ -299,11 +299,9 @@ struct Metrics {
 
 // Function to compute the required metrics
 Metrics computeMetrics(const pcl::PointCloud<pcl::Normal>::Ptr& cloud_normals, int expected_label) {
-    double total_confidence = 0.0;
     int total_points = cloud_normals->points.size();
-
-    Metrics metrics;
-    metrics.num_normals = total_points;
+    int true_positives = 0, false_positives = 0, false_negatives = 0, true_negatives = 0;
+    double total_confidence = 0.0;
 
     for (int i = 0; i < total_points; ++i) {
         svm_node nodes[3];
@@ -313,21 +311,53 @@ Metrics computeMetrics(const pcl::PointCloud<pcl::Normal>::Ptr& cloud_normals, i
         nodes[1].value = cloud_normals->points[i].normal_y;
         nodes[2].index = -1;
 
+        double predicted_label = svm_predict(model, nodes);
         double decision_values[1];
         svm_predict_values(model, nodes, decision_values);
-        double confidence = fabs(decision_values[0]); // Using distance from decision boundary as confidence
+        double confidence = fabs(decision_values[0]);
 
         total_confidence += confidence;
+
+        if (predicted_label == 1 && expected_label == 1) {
+            true_positives++;
+        } else if (predicted_label == 1 && expected_label == 0) {
+            false_positives++;
+        } else if (predicted_label == 0 && expected_label == 1) {
+            false_negatives++;
+        } else if (predicted_label == 0 && expected_label == 0) {
+            true_negatives++;
+        }
     }
 
+    Metrics metrics;
+    metrics.num_normals = total_points;
     metrics.model_confidence = total_confidence / total_points;
+
+    // Compute Precision, Recall, and F1 Score
+    if ((true_positives + false_positives) > 0) {
+        metrics.precision = (double)true_positives / (true_positives + false_positives);
+    } else {
+        metrics.precision = 0;
+    }
+
+    if ((true_positives + false_negatives) > 0) {
+        metrics.recall = (double)true_positives / (true_positives + false_negatives);
+    } else {
+        metrics.recall = 0;
+    }
+
+    if ((metrics.precision + metrics.recall) > 0) {
+        metrics.f1_score = 2 * (metrics.precision * metrics.recall) / (metrics.precision + metrics.recall);
+    } else {
+        metrics.f1_score = 0;
+    }
 
     return metrics;
 }
 
-// Detailed logging
+
 // Function to log results to CSV, ensuring the file is fresh each time
-void logResultsToCSV(const std::string& file_path, double pre_process_time, double feature_extraction_time, double prediction_time, double accuracy, int num_normals, double model_confidence, double cpu_utilization) {
+void logResultsToCSV(const std::string& file_path, double pre_process_time, double feature_extraction_time, double prediction_time, double accuracy, int num_normals, double model_confidence, double cpu_utilization, double precision, double recall, double f1_score) {
 
     // Check if the file exists and is not empty
     struct stat buffer;
@@ -338,7 +368,7 @@ void logResultsToCSV(const std::string& file_path, double pre_process_time, doub
 
     // If the file does not exist or is empty, write the header
     if (!file_exists || buffer.st_size == 0) {
-        file << "Preprocessing Time (s),Feature Extraction Time (s),Prediction Time (s),Accuracy,Num Normals,CPU Utilization (%),Model Confidence\n";
+        file << "Preprocessing Time (s),Feature Extraction Time (s),Prediction Time (s),Accuracy,Num Normals,CPU Utilization (%),Model Confidence,Precision,Recall,F1 Score\n";
     }
     // Write the data
     file << pre_process_time << "," 
@@ -347,12 +377,14 @@ void logResultsToCSV(const std::string& file_path, double pre_process_time, doub
          << accuracy << "," 
          << num_normals << "," 
          << cpu_utilization << ","
-         << model_confidence << "\n";
+         << model_confidence << ","
+         << precision << "," 
+         << recall << "," 
+         << f1_score << "\n";
 
     file.close();
     std::cout << "Performance Metrics Saved" << std::endl;
 }
-
 
 
 
@@ -517,7 +549,9 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
 
     // Log the results to CSV, including all the new metrics
     logResultsToCSV(file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy, 
-                    metrics.num_normals, metrics.model_confidence, cpu_utilization);
+                metrics.num_normals, metrics.model_confidence, cpu_utilization,
+                metrics.precision, metrics.recall, metrics.f1_score);
+
 }
 
 
@@ -552,10 +586,10 @@ int main(int argc, char** argv) {
 
     // Load the trained SVM 
     // std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for ASUS Laptop
-    // std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_90.model"; // Model Path for ASUS Laptop
+    std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model.model"; // Model Path for ASUS Laptop
 
     // std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for Jetson Nano
-    std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_90.model"; // Model Path for Jetson Nano
+    // std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_90.model"; // Model Path for Jetson Nano
     
     loadSVMModel(model_path);
     
