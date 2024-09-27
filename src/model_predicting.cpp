@@ -63,9 +63,10 @@ ros::Publisher pub_after_parallel_downsampling;
 
 // Path to save the results
 // Global paths
-std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/"; // Path for Asus Laptop
-// std::string file_path = FOLDER_PATH + "performance_metrics.csv"; // File name for testing model with Asus Laptop
-std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_rbf.csv"; // File name for testing model with Asus Laptop
+std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/performance_metrics/"; // Path for Asus Laptop
+// std::string file_path = FOLDER_PATH + "performance_metrics_robosense_linear_no_noise.csv"; // File name for testing model with Asus Laptop
+std::string file_path = FOLDER_PATH + "performance_metrics_robosense_linear_10mm_noise.csv"; // File name for testing model with Asus Laptop
+// std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_rbf.csv"; // File name for testing model with Asus Laptop
 
 // std::string FOLDER_PATH = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification"; // Path for Jetson Nano
 // std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_jetson.csv"; // File name for saving performance metrics while testing model with Jetson Nano
@@ -585,8 +586,8 @@ int main(int argc, char** argv) {
     }
 
     // Load the trained SVM 
-    // std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for ASUS Laptop
-    std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model.model"; // Model Path for ASUS Laptop
+    std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for ASUS Laptop
+    // std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model.model"; // Model Path for ASUS Laptop
 
     // std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for Jetson Nano
     // std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_90.model"; // Model Path for Jetson Nano
@@ -603,11 +604,11 @@ int main(int argc, char** argv) {
     pub_after_parallel_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/parallel_downsampled_cloud", 1);
 
     // Subscribing to Lidar Sensor topic
-    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
+    // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
     // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
 
     // Subscribing to Lidar Sensor topic for Noisy PointCloud
-    // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/noisy_cloud", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
+    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/noisy_cloud", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
     
     ros::spin();
 
