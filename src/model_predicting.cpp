@@ -65,7 +65,7 @@ ros::Publisher pub_after_parallel_downsampling;
 std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/performance_metrics/"; // Path for Asus Laptop
 
 // std::string file_path = FOLDER_PATH + "performance_metrics_robosense_linear_no_noise.csv"; // File name for testing model with Asus Laptop
-std::string file_path = FOLDER_PATH + "performance_metrics_robosense_linear_10mm_noise.csv"; // File name for testing model with Asus Laptop
+std::string file_path = FOLDER_PATH + "performance_metrics_robosense_linear_10mm_noise_plain_test_when_exptd_1.csv"; // File name for testing model with Asus Laptop
 
 // std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_linear.csv"; // File name for testing model with Asus Laptop
 // std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_rbf.csv"; // File name for testing model with Asus Laptop

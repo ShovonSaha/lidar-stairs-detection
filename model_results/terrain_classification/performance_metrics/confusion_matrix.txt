@@ -20,3 +20,51 @@ Confusion Matrix for performance_metrics_robosense_linear_10mm_noise.csv:
 ----------------------------
 TP: 1196, FP: 0, FN: 0, TN: 0
 ----------------------------
+
+---------------------------------------------------------------------
+LINEAR  Robosense with No Noise:::
+
+Accuracy: 0.999992650373361
+F1 Score: 0.9999940416725424
+Precision: 0.9999960277738056
+Recall: 0.9999920555791681
+AUC: 0.9999999997206871
+TPR: 0.9999920555791681
+FPR: 6.3924313612682584e-06
+
+Confusion Matrix:
+[[156434      1]
+ [     2 251747]]
+
+Classification Report:
+              precision    recall  f1-score   support
+
+       plain       1.00      1.00      1.00    156435
+       grass       1.00      1.00      1.00    251749
+
+    accuracy                           1.00    408184
+   macro avg       1.00      1.00      1.00    408184
+weighted avg       1.00      1.00      1.00    408184
+----------------------------------------------------------------------
+
+
+With 10mm Noise:
+Results for Noisy Test Data:
+Accuracy (Noisy): 0.9923
+F1 Score (Noisy): 0.9936
+Precision (Noisy): 0.9874
+Recall (Noisy): 0.9999
+Confusion Matrix (Noisy):
+[[152841   2980]
+ [    19 234341]]
+
+Classification Report (Noisy Data):
+              precision    recall  f1-score   support
+
+       plain       1.00      0.98      0.99    155821
+       grass       0.99      1.00      0.99    234360
+
+    accuracy                           0.99    390181
+   macro avg       0.99      0.99      0.99    390181
+weighted avg       0.99      0.99      0.99    390181
+

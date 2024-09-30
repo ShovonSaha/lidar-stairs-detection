@@ -8,6 +8,7 @@ csv_files = [
     'performance_metrics_cyglidar_rbf.csv',
     'performance_metrics_robosense_linear_no_noise.csv',
     'performance_metrics_robosense_linear_10mm_noise.csv'
+    'performance_metrics_robosense_linear_10mm_noise_plain_test_when_exptd_1.csv'
 ]
 
 def calculate_confusion_matrix(precision, recall, total_samples):
