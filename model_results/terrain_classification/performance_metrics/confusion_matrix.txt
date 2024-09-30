@@ -1,0 +1,22 @@
+Confusion Matrix for performance_metrics_cyglidar_linear.csv:
+----------------------------
+TP: 16, FP: 0, FN: 17, TN: 0
+----------------------------
+
+
+Confusion Matrix for performance_metrics_cyglidar_rbf.csv:
+----------------------------
+TP: 16, FP: 0, FN: 17, TN: 0
+----------------------------
+
+
+Confusion Matrix for performance_metrics_robosense_linear_no_noise.csv:
+----------------------------
+TP: 1197, FP: 0, FN: 0, TN: 0
+----------------------------
+
+
+Confusion Matrix for performance_metrics_robosense_linear_10mm_noise.csv:
+----------------------------
+TP: 1196, FP: 0, FN: 0, TN: 0
+----------------------------
