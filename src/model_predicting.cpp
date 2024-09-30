@@ -61,14 +61,17 @@ ros::Publisher pub_after_combined_passthrough;
 // Parralel Downsampling
 ros::Publisher pub_after_parallel_downsampling;
 
-// Path to save the results
-// Global paths
+// Path to save the results: Asus Laptop Directories
 std::string FOLDER_PATH = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/performance_metrics/"; // Path for Asus Laptop
+
 // std::string file_path = FOLDER_PATH + "performance_metrics_robosense_linear_no_noise.csv"; // File name for testing model with Asus Laptop
-// std::string file_path = FOLDER_PATH + "performance_metrics_robosense_linear_10mm_noise.csv"; // File name for testing model with Asus Laptop
-std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_linear.csv"; // File name for testing model with Asus Laptop
+std::string file_path = FOLDER_PATH + "performance_metrics_robosense_linear_10mm_noise.csv"; // File name for testing model with Asus Laptop
+
+// std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_linear.csv"; // File name for testing model with Asus Laptop
 // std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_rbf.csv"; // File name for testing model with Asus Laptop
 
+
+// Path to save the results: Jetson Nano Directories
 // std::string FOLDER_PATH = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification"; // Path for Jetson Nano
 // std::string file_path = FOLDER_PATH + "performance_metrics_cyglidar_jetson.csv"; // File name for saving performance metrics while testing model with Jetson Nano
 
@@ -297,6 +300,10 @@ struct Metrics {
     double precision;
     double recall;
     double f1_score;
+    int true_positives;
+    int false_positives;
+    int false_negatives;
+    int true_negatives;
 };
 
 // Function to compute the required metrics
@@ -320,6 +327,7 @@ Metrics computeMetrics(const pcl::PointCloud<pcl::Normal>::Ptr& cloud_normals, i
 
         total_confidence += confidence;
 
+        // Calculate true positives, false positives, etc.
         if (predicted_label == 1 && expected_label == 1) {
             true_positives++;
         } else if (predicted_label == 1 && expected_label == 0) {
@@ -354,12 +362,18 @@ Metrics computeMetrics(const pcl::PointCloud<pcl::Normal>::Ptr& cloud_normals, i
         metrics.f1_score = 0;
     }
 
+    // Save confusion matrix components for later use
+    metrics.true_positives = true_positives;
+    metrics.false_positives = false_positives;
+    metrics.false_negatives = false_negatives;
+    metrics.true_negatives = true_negatives;
+
     return metrics;
 }
 
 
 // Function to log results to CSV, ensuring the file is fresh each time
-void logResultsToCSV(const std::string& file_path, double pre_process_time, double feature_extraction_time, double prediction_time, double accuracy, int num_normals, double model_confidence, double cpu_utilization, double precision, double recall, double f1_score) {
+void logResultsToCSV(const std::string& file_path, double pre_process_time, double feature_extraction_time, double prediction_time, double accuracy, int num_normals, double model_confidence, double cpu_utilization, double precision, double recall, double f1_score, int true_positives, int false_positives, int false_negatives, int true_negatives) {
 
     // Check if the file exists and is not empty
     struct stat buffer;
@@ -370,7 +384,7 @@ void logResultsToCSV(const std::string& file_path, double pre_process_time, doub
 
     // If the file does not exist or is empty, write the header
     if (!file_exists || buffer.st_size == 0) {
-        file << "Preprocessing Time (s),Feature Extraction Time (s),Prediction Time (s),Accuracy,Num Normals,CPU Utilization (%),Model Confidence,Precision,Recall,F1 Score\n";
+        file << "Preprocessing Time (s),Feature Extraction Time (s),Prediction Time (s),Accuracy,Num Normals,CPU Utilization (%),Model Confidence,Precision,Recall,F1 Score,True Positives,False Positives,False Negatives,True Negatives\n";
     }
     // Write the data
     file << pre_process_time << "," 
@@ -382,10 +396,14 @@ void logResultsToCSV(const std::string& file_path, double pre_process_time, doub
          << model_confidence << ","
          << precision << "," 
          << recall << "," 
-         << f1_score << "\n";
+         << f1_score << ","
+         << true_positives << "," 
+         << false_positives << "," 
+         << false_negatives << "," 
+         << true_negatives << "\n";
 
     file.close();
-    std::cout << "Performance Metrics Saved" << std::endl;
+    std::cout << "Performance Metrics and Confusion Matrix Components Saved" << std::endl;
 }
 
 
@@ -549,11 +567,27 @@ void pointcloud_callback(const sensor_msgs::PointCloud2ConstPtr& input_msg, ros:
     // Calculate additional metrics (model confidence, precision, recall, F1-score, etc.)
     Metrics metrics = computeMetrics(normals_parallel, expected_label);
 
-    // Log the results to CSV, including all the new metrics
-    logResultsToCSV(file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy, 
-                metrics.num_normals, metrics.model_confidence, cpu_utilization,
-                metrics.precision, metrics.recall, metrics.f1_score);
+    // // Log the results to CSV, including all the new metrics
+    // logResultsToCSV(file_path, pre_process_time.count(), feature_extraction_time.count(), prediction_time.count(), accuracy, 
+    //             metrics.num_normals, metrics.model_confidence, cpu_utilization,
+    //             metrics.precision, metrics.recall, metrics.f1_score);
 
+    // Log the results to CSV, including all the new metrics
+    logResultsToCSV(file_path, 
+                    pre_process_time.count(), 
+                    feature_extraction_time.count(), 
+                    prediction_time.count(), 
+                    accuracy, 
+                    metrics.num_normals, 
+                    metrics.model_confidence, 
+                    cpu_utilization,
+                    metrics.precision, 
+                    metrics.recall, 
+                    metrics.f1_score,
+                    metrics.true_positives, 
+                    metrics.false_positives, 
+                    metrics.false_negatives, 
+                    metrics.true_negatives);
 }
 
 
@@ -587,8 +621,9 @@ int main(int argc, char** argv) {
     }
 
     // Load the trained SVM 
-    // std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for ASUS Laptop
-    std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_svm_rbf.model"; // Model Path for ASUS Laptop
+    std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for ASUS Laptop
+    
+    // std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_svm_rbf.model"; // Model Path for ASUS Laptop
     // std::string model_path = "/home/shovon/Desktop/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_cyglidar_model_90_linear.model"; // Model Path for ASUS Laptop
 
     // std::string model_path = "/home/jetson/catkin_ws/src/stat_analysis/model_results/terrain_classification/terrain_classification_model.model"; // Model Path for Jetson Nano
@@ -606,11 +641,11 @@ int main(int argc, char** argv) {
     pub_after_parallel_downsampling = nh.advertise<sensor_msgs::PointCloud2>("/parallel_downsampled_cloud", 1);
 
     // Subscribing to Lidar Sensor topic
-    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
+    // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/scan_3D", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // CygLidar D1 subscriber
     // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/rslidar_points", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
 
     // Subscribing to Lidar Sensor topic for Noisy PointCloud
-    // ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/noisy_cloud", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
+    ros::Subscriber sub = nh.subscribe<sensor_msgs::PointCloud2>("/noisy_cloud", 1, boost::bind(pointcloud_callback, _1, boost::ref(nh))); // RoboSense Lidar subscriber
     
     ros::spin();
 
