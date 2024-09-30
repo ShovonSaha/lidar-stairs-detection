@@ -183,7 +183,7 @@ include_directories(
   # ${FLANN_INCLUDE_DIRS}
   # ${CMAKE_CURRENT_SOURCE_DIR}/src
   # ${Python3_INCLUDE_DIRS}
-  /home/jetson/Downloads/libsvm-3.34  # Path to the libsvm header file
+  # /home/jetson/Downloads/libsvm-3.34  # Path to the libsvm header file
 )
 
 
@@ -218,10 +218,10 @@ add_definitions(${PCL_DEFINITIONS})
 
 # add_executable(robosense src/robosense.cpp)
 
-add_executable(terrain src/terrain.cpp) # Saves values in csv files for in-depth terrain classification algorithm (done later on python) 
+# add_executable(terrain src/terrain.cpp) # Saves values in csv files for in-depth terrain classification algorithm (done later on python) 
 
 # Model training an predicting
-add_executable(model_training src/model_training.cpp) # Loads features from the CSV file and trains the model 
+# add_executable(model_training src/model_training.cpp) # Loads features from the CSV file and trains the model 
 add_executable(model_predicting src/model_predicting.cpp) # Uses the model to predict the train in real-time
 
 # add_executable(pcl_viewer src/pcl_viewer.cpp)
@@ -295,27 +295,27 @@ add_executable(model_predicting src/model_predicting.cpp) # Uses the model to pr
 #   OpenMP::OpenMP_CXX
 # )
 
-target_link_libraries(terrain 
-  ${catkin_LIBRARIES}
-  ${PCL_LIBRARIES}
-  # mlpack
-  # armadillo
-  # OpenMP::OpenMP_CXX
-)
+# target_link_libraries(terrain 
+#   ${catkin_LIBRARIES}
+#   ${PCL_LIBRARIES}
+#   # mlpack
+#   # armadillo
+#   # OpenMP::OpenMP_CXX
+# )
 
 
-target_link_libraries(model_training
-  ${catkin_LIBRARIES}
-  ${PCL_LIBRARIES}
-  # /home/shovon/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for ASUS Laptop
-  /home/jetson/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for Jetson Nano
-)
+# target_link_libraries(model_training
+#   ${catkin_LIBRARIES}
+#   ${PCL_LIBRARIES}
+#   # /home/shovon/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for ASUS Laptop
+#   /home/jetson/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for Jetson Nano
+# )
 
 target_link_libraries(model_predicting
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
-  # /home/shovon/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for ASUS Laptop
-  /home/jetson/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for Jetson Nano
+  /home/shovon/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for ASUS Laptop
+  # /home/jetson/Downloads/libsvm-3.34/svm.cpp  # SVM library: Path for Jetson Nano
 )
 
 
